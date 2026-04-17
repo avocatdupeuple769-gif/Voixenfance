@@ -6,8 +6,10 @@ import {
   Alert,
   FlatList,
   Platform,
+  ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -57,9 +59,9 @@ export default function AdminDashboardScreen() {
       <AdminReportDetail
         report={selectedReport}
         onClose={() => setSelectedReport(null)}
-        onUpdateStatus={(status) => {
-          updateReportStatus(selectedReport.id, status);
-          setSelectedReport({ ...selectedReport, status });
+        onUpdateStatus={(status, adminNote) => {
+          updateReportStatus(selectedReport.id, status, adminNote);
+          setSelectedReport({ ...selectedReport, status, ...(adminNote ? { adminNote } : {}) });
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         }}
         colors={colors}
@@ -184,13 +186,14 @@ function AdminReportDetail({
 }: {
   report: Report;
   onClose: () => void;
-  onUpdateStatus: (s: Report["status"]) => void;
+  onUpdateStatus: (s: Report["status"], adminNote?: string) => void;
   colors: ReturnType<typeof import("@/hooks/useColors").useColors>;
   insets: { top: number; bottom: number };
   isWeb: boolean;
 }) {
   const date = new Date(report.submittedAt).toLocaleString("fr-GA");
   const ABUSE_LABELS = { sexual: "Abus sexuel", violence: "Violence", both: "Abus sexuel & Violence" };
+  const [adminNote, setAdminNote] = useState(report.adminNote || "");
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
@@ -202,67 +205,95 @@ function AdminReportDetail({
         <View style={{ width: 22 }} />
       </View>
 
-      <FlatList
-        data={[report]}
-        keyExtractor={(item) => item.id}
+      <ScrollView
         contentContainerStyle={[styles.detailContent, { paddingBottom: (isWeb ? 34 : insets.bottom) + 20 }]}
-        renderItem={() => (
-          <>
-            <View style={[styles.detailCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <Text style={[styles.detailSection, { color: colors.primary }]}>Informations confidentielles</Text>
-              <DetailRow icon="user" label="Signalé par" value={`${report.reporterName}, ${report.reporterAge} ans`} colors={colors} />
-              <DetailRow icon="calendar" label="Date de soumission" value={date} colors={colors} />
-              {report.location ? <DetailRow icon="map-pin" label="Lieu" value={report.location} colors={colors} /> : null}
-              <DetailRow icon="alert-triangle" label="Type d'abus" value={ABUSE_LABELS[report.abuseType]} colors={colors} />
-              <DetailRow icon="user-x" label="Âge de la victime" value={`${report.victimAge} ans`} colors={colors} />
-            </View>
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* Tracking code */}
+        <View style={[styles.detailCard, { backgroundColor: "#f0fdf4", borderColor: "#bbf7d0" }]}>
+          <View style={styles.codeRow}>
+            <Feather name="hash" size={15} color="#15803d" />
+            <Text style={[styles.detailSection, { color: "#15803d", marginBottom: 0 }]}>Code de suivi du signalant</Text>
+          </View>
+          <View style={[styles.codeBox, { backgroundColor: "#dcfce7" }]}>
+            <Text style={[styles.codeText, { color: "#166534" }]}>{report.trackingCode || "N/A"}</Text>
+          </View>
+        </View>
 
-            <View style={[styles.detailCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <Text style={[styles.detailSection, { color: colors.primary }]}>Description</Text>
-              <Text style={[styles.detailDesc, { color: colors.foreground }]}>{report.description}</Text>
-            </View>
+        <View style={[styles.detailCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[styles.detailSection, { color: colors.primary }]}>Informations confidentielles</Text>
+          <DetailRow icon="user" label="Signalé par" value={`${report.reporterName}, ${report.reporterAge} ans`} colors={colors} />
+          <DetailRow icon="calendar" label="Date de soumission" value={date} colors={colors} />
+          {report.location ? <DetailRow icon="map-pin" label="Lieu" value={report.location} colors={colors} /> : null}
+          <DetailRow icon="alert-triangle" label="Type d'abus" value={ABUSE_LABELS[report.abuseType]} colors={colors} />
+          <DetailRow icon="user-x" label="Âge de la victime" value={`${report.victimAge} ans`} colors={colors} />
+        </View>
 
-            {report.mediaUri ? (
-              <View style={[styles.detailCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <Text style={[styles.detailSection, { color: colors.primary }]}>Preuve jointe</Text>
-                <View style={[styles.mediaInfo, { backgroundColor: colors.secondary }]}>
-                  <Feather name={report.mediaType === "video" ? "video" : "image"} size={20} color={colors.primary} />
-                  <Text style={[styles.mediaInfoText, { color: colors.primary }]}>
-                    {report.mediaType === "video" ? "Vidéo jointe au dossier" : "Photo jointe au dossier"}
+        <View style={[styles.detailCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[styles.detailSection, { color: colors.primary }]}>Description</Text>
+          <Text style={[styles.detailDesc, { color: colors.foreground }]}>{report.description}</Text>
+        </View>
+
+        {report.mediaUri ? (
+          <View style={[styles.detailCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[styles.detailSection, { color: colors.primary }]}>Preuve jointe</Text>
+            <View style={[styles.mediaInfo, { backgroundColor: colors.secondary }]}>
+              <Feather name={report.mediaType === "video" ? "video" : "image"} size={20} color={colors.primary} />
+              <Text style={[styles.mediaInfoText, { color: colors.primary }]}>
+                {report.mediaType === "video" ? "Vidéo jointe au dossier" : "Photo jointe au dossier"}
+              </Text>
+            </View>
+          </View>
+        ) : null}
+
+        {/* Admin note */}
+        <View style={[styles.detailCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[styles.detailSection, { color: colors.primary }]}>Note administrative</Text>
+          <TextInput
+            style={[
+              styles.noteInput,
+              { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.background },
+            ]}
+            value={adminNote}
+            onChangeText={setAdminNote}
+            placeholder="Ajouter une note visible par le signalant..."
+            placeholderTextColor={colors.mutedForeground}
+            multiline
+            numberOfLines={3}
+            textAlignVertical="top"
+          />
+          <Text style={[styles.noteHint, { color: colors.mutedForeground }]}>
+            Cette note sera visible par le signalant via son code de suivi.
+          </Text>
+        </View>
+
+        <View style={[styles.detailCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[styles.detailSection, { color: colors.primary }]}>Statut du dossier</Text>
+          <View style={styles.statusRow}>
+            {(["pending", "reviewed", "closed"] as Report["status"][]).map((s) => {
+              const labels = { pending: "En attente", reviewed: "En cours", closed: "Traité" };
+              const isSelected = report.status === s;
+              return (
+                <TouchableOpacity
+                  key={s}
+                  style={[
+                    styles.statusBtn,
+                    {
+                      backgroundColor: isSelected ? colors.primary : colors.card,
+                      borderColor: isSelected ? colors.primary : colors.border,
+                    },
+                  ]}
+                  onPress={() => onUpdateStatus(s, adminNote.trim() || undefined)}
+                >
+                  <Text style={[styles.statusBtnText, { color: isSelected ? "#fff" : colors.foreground }]}>
+                    {labels[s]}
                   </Text>
-                </View>
-              </View>
-            ) : null}
-
-            <View style={[styles.detailCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <Text style={[styles.detailSection, { color: colors.primary }]}>Statut du dossier</Text>
-              <View style={styles.statusRow}>
-                {(["pending", "reviewed", "closed"] as Report["status"][]).map((s) => {
-                  const labels = { pending: "En attente", reviewed: "En cours", closed: "Traité" };
-                  const isSelected = report.status === s;
-                  return (
-                    <TouchableOpacity
-                      key={s}
-                      style={[
-                        styles.statusBtn,
-                        {
-                          backgroundColor: isSelected ? colors.primary : colors.card,
-                          borderColor: isSelected ? colors.primary : colors.border,
-                        },
-                      ]}
-                      onPress={() => onUpdateStatus(s)}
-                    >
-                      <Text style={[styles.statusBtnText, { color: isSelected ? "#fff" : colors.foreground }]}>
-                        {labels[s]}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </View>
-          </>
-        )}
-      />
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+      </ScrollView>
     </View>
   );
 }
@@ -472,5 +503,33 @@ const styles = StyleSheet.create({
   statusBtnText: {
     fontSize: 12,
     fontWeight: "700",
+  },
+  codeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  codeBox: {
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    alignItems: "center",
+  },
+  codeText: {
+    fontSize: 18,
+    fontWeight: "800",
+    letterSpacing: 2,
+  },
+  noteInput: {
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 12,
+    fontSize: 14,
+    minHeight: 80,
+    lineHeight: 20,
+  },
+  noteHint: {
+    fontSize: 11,
+    lineHeight: 15,
   },
 });

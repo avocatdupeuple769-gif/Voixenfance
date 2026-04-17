@@ -3,6 +3,7 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 
 export interface Report {
   id: string;
+  trackingCode: string;
   reporterName: string;
   reporterAge: string;
   victimAge: string;
@@ -13,12 +14,14 @@ export interface Report {
   mediaType?: "photo" | "video";
   submittedAt: string;
   status: "pending" | "reviewed" | "closed";
+  adminNote?: string;
 }
 
 interface AppContextType {
   reports: Report[];
-  addReport: (report: Omit<Report, "id" | "submittedAt" | "status">) => void;
-  updateReportStatus: (id: string, status: Report["status"]) => void;
+  addReport: (report: Omit<Report, "id" | "submittedAt" | "status" | "trackingCode">) => string;
+  updateReportStatus: (id: string, status: Report["status"], adminNote?: string) => void;
+  getReportByCode: (code: string) => Report | undefined;
   isAdmin: boolean;
   adminLogin: (password: string) => boolean;
   adminLogout: () => void;
@@ -26,8 +29,18 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | null>(null);
 
-const ADMIN_PASSWORD = "Guardian2024!";
-const STORAGE_KEY = "@guardian_gabon_reports";
+const ADMIN_PASSWORD = "VoixEnfance2024!";
+const STORAGE_KEY = "@voixenfance_reports";
+
+function generateTrackingCode(): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let code = "";
+  for (let i = 0; i < 8; i++) {
+    code += chars[Math.floor(Math.random() * chars.length)];
+    if (i === 3) code += "-";
+  }
+  return code;
+}
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [reports, setReports] = useState<Report[]>([]);
@@ -52,22 +65,31 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } catch {}
   };
 
-  const addReport = (reportData: Omit<Report, "id" | "submittedAt" | "status">) => {
+  const addReport = (reportData: Omit<Report, "id" | "submittedAt" | "status" | "trackingCode">): string => {
+    const trackingCode = generateTrackingCode();
     const newReport: Report = {
       ...reportData,
       id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+      trackingCode,
       submittedAt: new Date().toISOString(),
       status: "pending",
     };
     const updated = [newReport, ...reports];
     setReports(updated);
     saveReports(updated);
+    return trackingCode;
   };
 
-  const updateReportStatus = (id: string, status: Report["status"]) => {
-    const updated = reports.map((r) => (r.id === id ? { ...r, status } : r));
+  const updateReportStatus = (id: string, status: Report["status"], adminNote?: string) => {
+    const updated = reports.map((r) =>
+      r.id === id ? { ...r, status, ...(adminNote ? { adminNote } : {}) } : r
+    );
     setReports(updated);
     saveReports(updated);
+  };
+
+  const getReportByCode = (code: string): Report | undefined => {
+    return reports.find((r) => r.trackingCode.toLowerCase() === code.toLowerCase());
   };
 
   const adminLogin = (password: string): boolean => {
@@ -84,7 +106,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AppContext.Provider
-      value={{ reports, addReport, updateReportStatus, isAdmin, adminLogin, adminLogout }}
+      value={{ reports, addReport, updateReportStatus, getReportByCode, isAdmin, adminLogin, adminLogout }}
     >
       {children}
     </AppContext.Provider>

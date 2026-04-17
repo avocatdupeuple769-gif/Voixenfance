@@ -1,6 +1,6 @@
 import { Feather } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
+import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import React, { useEffect } from "react";
 import {
@@ -56,7 +56,6 @@ export default function WelcomeScreen() {
 
   return (
     <View style={styles.root}>
-      {/* Background gradient layers */}
       <View style={[StyleSheet.absoluteFill, { backgroundColor: "#0d2146" }]} />
       <View style={[styles.gradientOverlay, { backgroundColor: "#1a3a6b" }]} />
       <View style={styles.goldAccent} />
@@ -68,7 +67,7 @@ export default function WelcomeScreen() {
       <View style={[styles.circle, styles.circle3]} />
 
       <View style={[styles.content, { paddingTop: topPad + 20, paddingBottom: bottomPad + 20 }]}>
-        {/* Top badge */}
+        {/* Badge */}
         <Animated.View entering={FadeInDown.delay(200).duration(600)} style={styles.topBadge}>
           <View style={styles.badgeDot} />
           <Text style={styles.badgeText}>GABON — Protection de l'Enfance</Text>
@@ -86,34 +85,30 @@ export default function WelcomeScreen() {
           </Animated.View>
         </View>
 
-        {/* App name */}
+        {/* Name */}
         <Animated.View entering={FadeInUp.delay(500).duration(700)} style={styles.nameBlock}>
-          <Text style={styles.appName}>Guardian</Text>
-          <Text style={styles.appNameGold}>Gabon</Text>
+          <Text style={styles.appName}>Voix</Text>
+          <Text style={styles.appNameGold}>Enfance</Text>
         </Animated.View>
 
-        {/* Tagline */}
-        <Animated.Text
-          entering={FadeInUp.delay(650).duration(600)}
-          style={styles.tagline}
-        >
-          Protéger les enfants, ensemble
+        <Animated.Text entering={FadeInUp.delay(630).duration(600)} style={styles.tagline}>
+          La voix des enfants du Gabon
         </Animated.Text>
 
         {/* Divider */}
         <Animated.View entering={FadeIn.delay(700).duration(600)} style={styles.divider}>
-          <View style={[styles.dividerLine, { backgroundColor: "rgba(201,162,39,0.4)" }]} />
-          <Feather name="shield" size={14} color="#c9a227" />
-          <View style={[styles.dividerLine, { backgroundColor: "rgba(201,162,39,0.4)" }]} />
+          <View style={styles.dividerLine} />
+          <Feather name="shield" size={13} color="#c9a227" />
+          <View style={styles.dividerLine} />
         </Animated.View>
 
-        {/* Description */}
+        {/* Features */}
         <Animated.View entering={FadeInUp.delay(800).duration(600)} style={styles.descBlock}>
           {[
             { icon: "user-x" as const, text: "Signalez anonymement — votre identité est protégée" },
-            { icon: "lock" as const, text: "Confidentialité totale de vos informations" },
+            { icon: "search" as const, text: "Suivez votre dossier avec un code confidentiel" },
             { icon: "phone-call" as const, text: "Numéros d'urgence disponibles 24h/24" },
-            { icon: "book-open" as const, text: "Code pénal gabonais à portée de main" },
+            { icon: "life-buoy" as const, text: "Ressources d'aide : ONG, soutien psychologique" },
           ].map((item, i) => (
             <View key={i} style={styles.descRow}>
               <View style={styles.descIconWrap}>
@@ -126,17 +121,12 @@ export default function WelcomeScreen() {
 
         <View style={styles.spacer} />
 
-        {/* CTA Button */}
+        {/* CTA */}
         <Animated.View entering={FadeInUp.delay(1000).duration(600)} style={styles.ctaBlock}>
-          <TouchableOpacity
-            style={styles.ctaButton}
-            onPress={handleStart}
-            activeOpacity={0.85}
-          >
+          <TouchableOpacity style={styles.ctaButton} onPress={handleStart} activeOpacity={0.85}>
             <Text style={styles.ctaText}>Accéder à l'application</Text>
             <Feather name="arrow-right" size={20} color="#0d2146" />
           </TouchableOpacity>
-
           <Text style={styles.legalNote}>
             Toutes vos données sont confidentielles et sécurisées
           </Text>
@@ -147,10 +137,7 @@ export default function WelcomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: "#0d2146",
-  },
+  root: { flex: 1, backgroundColor: "#0d2146" },
   gradientOverlay: {
     position: "absolute",
     top: 0,
@@ -234,7 +221,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   logoSection: {
-    marginTop: 28,
+    marginTop: 26,
     width: 140,
     height: 140,
     alignItems: "center",
@@ -248,8 +235,8 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(201,162,39,0.18)",
   },
   logoContainer: {
-    width: 118,
-    height: 118,
+    width: 116,
+    height: 116,
     borderRadius: 30,
     backgroundColor: "rgba(255,255,255,0.06)",
     borderWidth: 1.5,
@@ -259,14 +246,14 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   logo: {
-    width: 100,
-    height: 100,
+    width: 98,
+    height: 98,
   },
   nameBlock: {
     flexDirection: "row",
     alignItems: "baseline",
     gap: 6,
-    marginTop: 22,
+    marginTop: 20,
   },
   appName: {
     fontSize: 38,
@@ -281,25 +268,26 @@ const styles = StyleSheet.create({
     letterSpacing: -1,
   },
   tagline: {
-    fontSize: 15,
-    color: "rgba(255,255,255,0.65)",
-    marginTop: 6,
-    letterSpacing: 0.3,
+    fontSize: 14,
+    color: "rgba(255,255,255,0.6)",
+    marginTop: 5,
+    letterSpacing: 0.2,
     textAlign: "center",
   },
   divider: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    marginTop: 28,
+    marginTop: 24,
     width: "100%",
   },
   dividerLine: {
     flex: 1,
     height: 1,
+    backgroundColor: "rgba(201,162,39,0.4)",
   },
   descBlock: {
-    marginTop: 22,
+    marginTop: 20,
     width: "100%",
     gap: 12,
     backgroundColor: "rgba(255,255,255,0.04)",
@@ -323,13 +311,11 @@ const styles = StyleSheet.create({
   },
   descText: {
     color: "rgba(255,255,255,0.8)",
-    fontSize: 14,
+    fontSize: 13,
     flex: 1,
-    lineHeight: 19,
+    lineHeight: 18,
   },
-  spacer: {
-    flex: 1,
-  },
+  spacer: { flex: 1 },
   ctaBlock: {
     width: "100%",
     gap: 14,
@@ -352,7 +338,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
   legalNote: {
-    fontSize: 12,
+    fontSize: 11,
     color: "rgba(255,255,255,0.4)",
     textAlign: "center",
   },

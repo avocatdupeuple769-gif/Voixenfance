@@ -29,20 +29,22 @@ export default function HomeScreen() {
         contentContainerStyle={[styles.content, { paddingBottom: bottomPadding + 40 }]}
         showsVerticalScrollIndicator={false}
       >
+        {/* App identity */}
         <View style={styles.heroRow}>
           <View style={[styles.shieldIcon, { backgroundColor: colors.primary }]}>
-            <Feather name="shield" size={32} color={colors.primaryForeground} />
+            <Feather name="shield" size={30} color={colors.primaryForeground} />
           </View>
           <View style={styles.heroText}>
-            <Text style={[styles.appName, { color: colors.primary }]}>GuardianGabon</Text>
+            <Text style={[styles.appName, { color: colors.primary }]}>VoixEnfance</Text>
             <Text style={[styles.tagline, { color: colors.mutedForeground }]}>
-              Protéger les enfants, ensemble
+              La voix des enfants du Gabon
             </Text>
           </View>
         </View>
 
+        {/* Confidentiality note */}
         <View style={[styles.alertBox, { backgroundColor: "#fef2f2", borderColor: "#fecaca" }]}>
-          <Feather name="lock" size={16} color="#dc2626" />
+          <Feather name="lock" size={15} color="#dc2626" />
           <Text style={[styles.alertText, { color: "#991b1b" }]}>
             Toutes les informations restent strictement confidentielles. Votre signalement est
             anonyme et protégé.
@@ -53,6 +55,7 @@ export default function HomeScreen() {
           Que souhaitez-vous faire ?
         </Text>
 
+        {/* Primary action */}
         <TouchableOpacity
           style={[styles.mainAction, { backgroundColor: colors.primary }]}
           onPress={() => {
@@ -62,88 +65,82 @@ export default function HomeScreen() {
           activeOpacity={0.85}
         >
           <View style={[styles.actionIcon, { backgroundColor: "rgba(255,255,255,0.2)" }]}>
-            <Feather name="alert-triangle" size={26} color="#ffffff" />
+            <Feather name="alert-triangle" size={24} color="#ffffff" />
           </View>
           <View style={styles.actionTextBlock}>
-            <Text style={styles.actionTitle}>Signaler un abus</Text>
-            <Text style={styles.actionSubtitle}>Signalement anonyme et confidentiel</Text>
+            <Text style={styles.actionTitleWhite}>Signaler un abus</Text>
+            <Text style={styles.actionSubWhite}>Signalement anonyme et confidentiel</Text>
           </View>
           <Feather name="chevron-right" size={20} color="rgba(255,255,255,0.7)" />
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.secondaryAction, { backgroundColor: colors.card, borderColor: colors.border }]}
-          onPress={() => {
-            Haptics.selectionAsync();
-            router.push("/penal-code");
-          }}
-          activeOpacity={0.8}
-        >
-          <View style={[styles.actionIcon, { backgroundColor: colors.secondary }]}>
-            <Feather name="book-open" size={22} color={colors.primary} />
-          </View>
-          <View style={styles.actionTextBlock}>
-            <Text style={[styles.actionTitleDark, { color: colors.foreground }]}>
-              Code pénal gabonais
-            </Text>
-            <Text style={[styles.actionSubtitleDark, { color: colors.mutedForeground }]}>
-              Articles sur la protection des mineurs
-            </Text>
-          </View>
-          <Feather name="chevron-right" size={20} color={colors.mutedForeground} />
-        </TouchableOpacity>
+        {/* Secondary actions */}
+        <View style={styles.twoColumns}>
+          <TouchableOpacity
+            style={[styles.halfCard, { backgroundColor: "#fef2f2", borderColor: "#fecaca" }]}
+            onPress={() => { Haptics.selectionAsync(); router.push("/track-report"); }}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.halfIcon, { backgroundColor: "#fee2e2" }]}>
+              <Feather name="search" size={20} color="#dc2626" />
+            </View>
+            <Text style={[styles.halfTitle, { color: "#991b1b" }]}>Suivre mon dossier</Text>
+            <Text style={[styles.halfSub, { color: "#b91c1c" }]}>Avec votre code</Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.secondaryAction, { backgroundColor: colors.card, borderColor: colors.border }]}
-          onPress={() => {
-            Haptics.selectionAsync();
-            router.push("/admin-login");
-          }}
-          activeOpacity={0.8}
-        >
-          <View style={[styles.actionIcon, { backgroundColor: "#f0fdf4" }]}>
-            <Feather name="settings" size={22} color="#16a34a" />
-          </View>
-          <View style={styles.actionTextBlock}>
-            <Text style={[styles.actionTitleDark, { color: colors.foreground }]}>
-              Espace administrateur
-            </Text>
-            <Text style={[styles.actionSubtitleDark, { color: colors.mutedForeground }]}>
-              Accès réservé aux autorités
-            </Text>
-          </View>
-          <Feather name="chevron-right" size={20} color={colors.mutedForeground} />
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.halfCard, { backgroundColor: "#f0fdf4", borderColor: "#bbf7d0" }]}
+            onPress={() => { Haptics.selectionAsync(); router.push("/resources"); }}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.halfIcon, { backgroundColor: "#dcfce7" }]}>
+              <Feather name="life-buoy" size={20} color="#15803d" />
+            </View>
+            <Text style={[styles.halfTitle, { color: "#14532d" }]}>Ressources</Text>
+            <Text style={[styles.halfSub, { color: "#166534" }]}>ONG & soutien</Text>
+          </TouchableOpacity>
+        </View>
 
+        <View style={styles.twoColumns}>
+          <TouchableOpacity
+            style={[styles.halfCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+            onPress={() => { Haptics.selectionAsync(); router.push("/penal-code"); }}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.halfIcon, { backgroundColor: colors.secondary }]}>
+              <Feather name="book-open" size={20} color={colors.primary} />
+            </View>
+            <Text style={[styles.halfTitle, { color: colors.foreground }]}>Code pénal</Text>
+            <Text style={[styles.halfSub, { color: colors.mutedForeground }]}>Articles mineurs</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.halfCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+            onPress={() => { Haptics.selectionAsync(); router.push("/admin-login"); }}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.halfIcon, { backgroundColor: "#f9fafb" }]}>
+              <Feather name="settings" size={20} color="#374151" />
+            </View>
+            <Text style={[styles.halfTitle, { color: colors.foreground }]}>Administrateur</Text>
+            <Text style={[styles.halfSub, { color: colors.mutedForeground }]}>Accès réservé</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* How it works */}
         <View style={[styles.infoCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.infoTitle, { color: colors.primary }]}>
-            Comment fonctionne l'application ?
-          </Text>
+          <Text style={[styles.infoTitle, { color: colors.primary }]}>Comment ça fonctionne ?</Text>
           {[
-            {
-              icon: "user-x" as const,
-              text: "Vous signalez anonymement — votre identité est cachée du public",
-            },
-            {
-              icon: "lock" as const,
-              text: "Seul l'administrateur voit les détails du signalement",
-            },
-            {
-              icon: "shield" as const,
-              text: "Toutes les données sont chiffrées et sécurisées",
-            },
-            {
-              icon: "phone" as const,
-              text: "Les autorités peuvent être contactées directement en urgence",
-            },
+            { icon: "user-x" as const, text: "Signalez anonymement — votre identité est cachée du public" },
+            { icon: "hash" as const, text: "Recevez un code de suivi pour suivre votre dossier" },
+            { icon: "lock" as const, text: "Seul l'administrateur voit les détails confidentiels" },
+            { icon: "life-buoy" as const, text: "Accédez aux ressources d'aide et de soutien" },
           ].map((item, i) => (
             <View key={i} style={styles.infoRow}>
               <View style={[styles.infoIconWrap, { backgroundColor: colors.secondary }]}>
                 <Feather name={item.icon} size={14} color={colors.primary} />
               </View>
-              <Text style={[styles.infoText, { color: colors.mutedForeground }]}>
-                {item.text}
-              </Text>
+              <Text style={[styles.infoText, { color: colors.mutedForeground }]}>{item.text}</Text>
             </View>
           ))}
         </View>
@@ -164,18 +161,18 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 14,
-    marginBottom: 4,
+    marginBottom: 2,
   },
   shieldIcon: {
-    width: 60,
-    height: 60,
-    borderRadius: 18,
+    width: 56,
+    height: 56,
+    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
   },
   heroText: { flex: 1 },
   appName: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: "800",
     letterSpacing: -0.5,
   },
@@ -187,20 +184,20 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-start",
     gap: 8,
-    padding: 12,
+    padding: 11,
     borderRadius: 10,
     borderWidth: 1,
   },
   alertText: {
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: 12,
+    lineHeight: 17,
     flex: 1,
     fontWeight: "500",
   },
   sectionTitle: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: "700",
-    marginTop: 4,
+    marginTop: 2,
   },
   mainAction: {
     flexDirection: "row",
@@ -210,50 +207,61 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
   actionIcon: {
-    width: 52,
-    height: 52,
+    width: 50,
+    height: 50,
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
   },
   actionTextBlock: { flex: 1 },
-  actionTitle: {
+  actionTitleWhite: {
     fontSize: 16,
     fontWeight: "700",
     color: "#ffffff",
   },
-  actionSubtitle: {
+  actionSubWhite: {
     fontSize: 12,
     color: "rgba(255,255,255,0.75)",
     marginTop: 2,
   },
-  secondaryAction: {
+  twoColumns: {
     flexDirection: "row",
-    alignItems: "center",
-    gap: 14,
-    padding: 16,
-    borderRadius: 16,
+    gap: 10,
+  },
+  halfCard: {
+    flex: 1,
+    borderRadius: 14,
     borderWidth: 1,
+    padding: 14,
+    gap: 8,
   },
-  actionTitleDark: {
-    fontSize: 15,
+  halfIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  halfTitle: {
+    fontSize: 14,
     fontWeight: "700",
+    lineHeight: 18,
   },
-  actionSubtitleDark: {
-    fontSize: 12,
-    marginTop: 2,
+  halfSub: {
+    fontSize: 11,
+    fontWeight: "500",
   },
   infoCard: {
     borderRadius: 14,
     borderWidth: 1,
     padding: 16,
     gap: 12,
-    marginTop: 4,
+    marginTop: 2,
   },
   infoTitle: {
     fontSize: 14,
     fontWeight: "700",
-    marginBottom: 4,
+    marginBottom: 2,
   },
   infoRow: {
     flexDirection: "row",
