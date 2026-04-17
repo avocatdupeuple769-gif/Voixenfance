@@ -23,7 +23,9 @@ const queryClient = new QueryClient();
 function RootLayoutNav() {
   return (
     <Stack>
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="index" options={{ headerShown: false }} />
+      <Stack.Screen name="welcome" options={{ headerShown: false }} />
+      <Stack.Screen name="home" options={{ headerShown: false }} />
       <Stack.Screen
         name="report"
         options={{
@@ -56,9 +58,7 @@ function RootLayoutNav() {
       />
       <Stack.Screen
         name="admin-dashboard"
-        options={{
-          headerShown: false,
-        }}
+        options={{ headerShown: false }}
       />
     </Stack>
   );

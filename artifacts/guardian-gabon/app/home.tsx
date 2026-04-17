@@ -3,7 +3,6 @@ import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import React from "react";
 import {
-  Image,
   Platform,
   ScrollView,
   StyleSheet,
@@ -19,8 +18,6 @@ export default function HomeScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
-
-  const topPadding = isWeb ? 67 : insets.top;
   const bottomPadding = isWeb ? 34 : insets.bottom;
 
   return (
@@ -29,10 +26,7 @@ export default function HomeScreen() {
 
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[
-          styles.content,
-          { paddingTop: 20, paddingBottom: bottomPadding + 80 },
-        ]}
+        contentContainerStyle={[styles.content, { paddingBottom: bottomPadding + 40 }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.heroRow}>
@@ -55,7 +49,9 @@ export default function HomeScreen() {
           </Text>
         </View>
 
-        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Que souhaitez-vous faire ?</Text>
+        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
+          Que souhaitez-vous faire ?
+        </Text>
 
         <TouchableOpacity
           style={[styles.mainAction, { backgroundColor: colors.primary }]}
@@ -87,7 +83,9 @@ export default function HomeScreen() {
             <Feather name="book-open" size={22} color={colors.primary} />
           </View>
           <View style={styles.actionTextBlock}>
-            <Text style={[styles.actionTitleDark, { color: colors.foreground }]}>Code pénal gabonais</Text>
+            <Text style={[styles.actionTitleDark, { color: colors.foreground }]}>
+              Code pénal gabonais
+            </Text>
             <Text style={[styles.actionSubtitleDark, { color: colors.mutedForeground }]}>
               Articles sur la protection des mineurs
             </Text>
@@ -107,7 +105,9 @@ export default function HomeScreen() {
             <Feather name="settings" size={22} color="#16a34a" />
           </View>
           <View style={styles.actionTextBlock}>
-            <Text style={[styles.actionTitleDark, { color: colors.foreground }]}>Espace administrateur</Text>
+            <Text style={[styles.actionTitleDark, { color: colors.foreground }]}>
+              Espace administrateur
+            </Text>
             <Text style={[styles.actionSubtitleDark, { color: colors.mutedForeground }]}>
               Accès réservé aux autorités
             </Text>
@@ -120,16 +120,30 @@ export default function HomeScreen() {
             Comment fonctionne l'application ?
           </Text>
           {[
-            { icon: "user-x" as const, text: "Vous signalez anonymement — votre identité est cachée du public" },
-            { icon: "lock" as const, text: "Seul l'administrateur voit les détails du signalement" },
-            { icon: "shield" as const, text: "Toutes les données sont chiffrées et sécurisées" },
-            { icon: "phone" as const, text: "Les autorités peuvent être contactées directement en urgence" },
+            {
+              icon: "user-x" as const,
+              text: "Vous signalez anonymement — votre identité est cachée du public",
+            },
+            {
+              icon: "lock" as const,
+              text: "Seul l'administrateur voit les détails du signalement",
+            },
+            {
+              icon: "shield" as const,
+              text: "Toutes les données sont chiffrées et sécurisées",
+            },
+            {
+              icon: "phone" as const,
+              text: "Les autorités peuvent être contactées directement en urgence",
+            },
           ].map((item, i) => (
             <View key={i} style={styles.infoRow}>
               <View style={[styles.infoIconWrap, { backgroundColor: colors.secondary }]}>
                 <Feather name={item.icon} size={14} color={colors.primary} />
               </View>
-              <Text style={[styles.infoText, { color: colors.mutedForeground }]}>{item.text}</Text>
+              <Text style={[styles.infoText, { color: colors.mutedForeground }]}>
+                {item.text}
+              </Text>
             </View>
           ))}
         </View>
@@ -139,14 +153,11 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-  },
-  scroll: {
-    flex: 1,
-  },
+  root: { flex: 1 },
+  scroll: { flex: 1 },
   content: {
     paddingHorizontal: 16,
+    paddingTop: 20,
     gap: 12,
   },
   heroRow: {
@@ -162,9 +173,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  heroText: {
-    flex: 1,
-  },
+  heroText: { flex: 1 },
   appName: {
     fontSize: 24,
     fontWeight: "800",
@@ -207,9 +216,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  actionTextBlock: {
-    flex: 1,
-  },
+  actionTextBlock: { flex: 1 },
   actionTitle: {
     fontSize: 16,
     fontWeight: "700",

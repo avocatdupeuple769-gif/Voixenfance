@@ -46,7 +46,7 @@ export default function AdminDashboardScreen() {
         style: "destructive",
         onPress: () => {
           adminLogout();
-          router.replace("/");
+          router.replace("/home");
         },
       },
     ]);
