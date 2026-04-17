@@ -1,0 +1,27 @@
+kind = "mobile"
+previewPath = "/"
+title = "GuardianGabon"
+version = "1.0.0"
+id = "artifacts/guardian-gabon"
+router = "expo-domain"
+
+[[integratedSkills]]
+name = "expo"
+version = "1.0.0"
+
+[[services]]
+ensurePreviewReachable = "/status"
+name = "expo"
+paths = [ "/" ]
+localPort = 19409
+
+[services.development]
+run = "pnpm --filter @workspace/guardian-gabon run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/guardian-gabon", "run", "build" ]
+run = [ "pnpm", "--filter", "@workspace/guardian-gabon", "run", "serve" ]
+
+[services.env]
+PORT = "19409"
+BASE_PATH = "/"

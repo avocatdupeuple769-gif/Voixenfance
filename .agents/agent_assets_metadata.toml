@@ -1,0 +1,8 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "z7xHXYkyJ79kSOTh3i2p7"
+uri = "file://artifacts/guardian-gabon/assets/images/icon.png"
+type = "image"
+title = "guardian gabon shield icon"
