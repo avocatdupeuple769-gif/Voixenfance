@@ -31,7 +31,6 @@ jobs:
           node -e "
             const fs = require('fs');
             const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-            // Resolve catalog references
             const catalog = {
               '@tanstack/react-query': '^5.90.21',
               'react': '19.1.0',
@@ -56,6 +55,11 @@ jobs:
       - name: Install dependencies with npm
         working-directory: artifacts/guardian-gabon
         run: npm install --legacy-peer-deps
+
+      - name: Create root node_modules symlink (for Metro bundler)
+        run: |
+          ln -sf artifacts/guardian-gabon/node_modules node_modules
+          echo "Symlink créé: $(readlink node_modules)"
 
       - name: Expo Prebuild
         working-directory: artifacts/guardian-gabon
