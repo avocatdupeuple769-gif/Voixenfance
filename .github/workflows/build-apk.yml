@@ -14,16 +14,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'pnpm'
 
       - name: Setup Java 17
         uses: actions/setup-java@v4
@@ -31,10 +25,39 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Install workspace dependencies
-        run: pnpm install
+      - name: Prepare standalone package.json
+        working-directory: artifacts/guardian-gabon
+        run: |
+          node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+            // Resolve catalog references
+            const catalog = {
+              '@tanstack/react-query': '^5.90.21',
+              'react': '19.1.0',
+              'react-dom': '19.1.0',
+              'zod': '^3.25.76'
+            };
+            function resolve(deps) {
+              if (!deps) return deps;
+              const out = {};
+              for (const [k, v] of Object.entries(deps)) {
+                if (k === '@workspace/api-client-react') continue;
+                out[k] = v === 'catalog:' ? (catalog[k] || v) : v;
+              }
+              return out;
+            }
+            pkg.devDependencies = resolve(pkg.devDependencies);
+            pkg.dependencies = resolve(pkg.dependencies);
+            fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2));
+            console.log('package.json resolved successfully');
+          "
 
-      - name: Expo Prebuild (generate Android native project)
+      - name: Install dependencies with npm
+        working-directory: artifacts/guardian-gabon
+        run: npm install --legacy-peer-deps
+
+      - name: Expo Prebuild
         working-directory: artifacts/guardian-gabon
         run: npx expo prebuild --platform android --clean --no-install
         env:
