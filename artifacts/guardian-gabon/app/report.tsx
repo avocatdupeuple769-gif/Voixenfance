@@ -109,11 +109,7 @@ export default function ReportScreen() {
       });
       setSubmitting(false);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert(
-        "Signalement envoyé",
-        `Votre signalement a été transmis de manière confidentielle.\n\n🔑 Votre code de suivi :\n\n${code}\n\nNotez ce code précieusement — il vous permettra de suivre l'avancement de votre dossier de façon anonyme. Merci pour votre courage.`,
-        [{ text: "J'ai noté mon code", onPress: () => router.replace("/home") }]
-      );
+      router.replace({ pathname: "/report-success", params: { code } });
     }, 1000);
   };
 
