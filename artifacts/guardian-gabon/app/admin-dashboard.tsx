@@ -12,6 +12,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ReportCard } from "@/components/ReportCard";
@@ -23,11 +24,12 @@ type FilterStatus = "all" | "pending" | "reviewed" | "closed";
 export default function AdminDashboardScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { reports, adminLogout, isAdmin, updateReportStatus, refreshReports } = useApp();
+  const { reports, adminLogout, isAdmin, updateReportStatus, refreshReports, sendAlarm, deviceCount } = useApp();
   const isWeb = Platform.OS === "web";
   const [filter, setFilter] = useState<FilterStatus>("all");
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [alarmSending, setAlarmSending] = useState(false);
 
   useEffect(() => {
     handleRefresh();
@@ -37,6 +39,33 @@ export default function AdminDashboardScreen() {
     setRefreshing(true);
     await refreshReports();
     setRefreshing(false);
+  };
+
+  const handleAlarm = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    Alert.alert(
+      "🚨 Déclencher l'alarme",
+      `Vous allez envoyer une alerte d'urgence à ${deviceCount} appareil(s) enregistré(s). Tous les utilisateurs de l'application recevront une notification immédiate.\n\nConfirmez-vous ?`,
+      [
+        { text: "Annuler", style: "cancel" },
+        {
+          text: "OUI — DÉCLENCHER",
+          style: "destructive",
+          onPress: async () => {
+            setAlarmSending(true);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+            const result = await sendAlarm();
+            setAlarmSending(false);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            Alert.alert(
+              "✅ Alarme envoyée",
+              `L'alarme a été envoyée à ${result.sent} appareil(s) sur ${result.total} enregistré(s).`,
+              [{ text: "OK" }]
+            );
+          },
+        },
+      ]
+    );
   };
 
   if (!isAdmin) {
@@ -113,6 +142,25 @@ export default function AdminDashboardScreen() {
             </TouchableOpacity>
           </View>
         </View>
+
+        <TouchableOpacity
+          style={[styles.alarmBtn, alarmSending && { opacity: 0.6 }]}
+          onPress={handleAlarm}
+          disabled={alarmSending}
+          activeOpacity={0.8}
+        >
+          {alarmSending ? (
+            <ActivityIndicator color="#fff" size="small" />
+          ) : (
+            <Feather name="alert-octagon" size={22} color="#fff" />
+          )}
+          <Text style={styles.alarmBtnText}>
+            {alarmSending ? "Envoi en cours..." : `🚨 DÉCLENCHER L'ALARME`}
+          </Text>
+          <View style={styles.alarmBadge}>
+            <Text style={styles.alarmBadgeText}>{deviceCount}</Text>
+          </View>
+        </TouchableOpacity>
 
         <View style={styles.statsRow}>
           <View style={[styles.statCard, { backgroundColor: "rgba(255,255,255,0.15)" }]}>
@@ -551,5 +599,43 @@ const styles = StyleSheet.create({
   noteHint: {
     fontSize: 11,
     lineHeight: 15,
+  },
+  alarmBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    backgroundColor: "#dc2626",
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    marginTop: 4,
+    shadowColor: "#dc2626",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  alarmBtnText: {
+    color: "#ffffff",
+    fontSize: 15,
+    fontWeight: "800",
+    letterSpacing: 0.5,
+    flex: 1,
+    textAlign: "center",
+  },
+  alarmBadge: {
+    backgroundColor: "rgba(255,255,255,0.25)",
+    borderRadius: 12,
+    minWidth: 28,
+    height: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 6,
+  },
+  alarmBadgeText: {
+    color: "#ffffff",
+    fontSize: 13,
+    fontWeight: "800",
   },
 });
