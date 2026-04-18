@@ -1,7 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Alert,
   FlatList,
@@ -23,10 +23,21 @@ type FilterStatus = "all" | "pending" | "reviewed" | "closed";
 export default function AdminDashboardScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { reports, adminLogout, isAdmin, updateReportStatus } = useApp();
+  const { reports, adminLogout, isAdmin, updateReportStatus, refreshReports } = useApp();
   const isWeb = Platform.OS === "web";
   const [filter, setFilter] = useState<FilterStatus>("all");
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    handleRefresh();
+  }, []);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await refreshReports();
+    setRefreshing(false);
+  };
 
   if (!isAdmin) {
     router.replace("/admin-login");
@@ -86,12 +97,21 @@ export default function AdminDashboardScreen() {
             <Text style={styles.headerTitle}>Tableau de bord</Text>
             <Text style={styles.headerSubtitle}>{reports.length} signalement(s) total</Text>
           </View>
-          <TouchableOpacity
-            style={styles.logoutBtn}
-            onPress={handleLogout}
-          >
-            <Feather name="log-out" size={20} color="#ffffff" />
-          </TouchableOpacity>
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <TouchableOpacity
+              style={styles.logoutBtn}
+              onPress={handleRefresh}
+              disabled={refreshing}
+            >
+              <Feather name="refresh-cw" size={20} color={refreshing ? "rgba(255,255,255,0.4)" : "#ffffff"} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.logoutBtn}
+              onPress={handleLogout}
+            >
+              <Feather name="log-out" size={20} color="#ffffff" />
+            </TouchableOpacity>
+          </View>
         </View>
 
         <View style={styles.statsRow}>
