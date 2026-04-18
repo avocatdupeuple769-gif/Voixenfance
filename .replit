@@ -30,3 +30,8 @@ externalPort = 80
 [[ports]]
 localPort = 19409
 externalPort = 3000
+
+[userenv]
+
+[userenv.shared]
+EXPO_TOKEN = "pSpaOkKXjavMfSVe03moulnKvf9ZR-pOR0DJaf2N"
