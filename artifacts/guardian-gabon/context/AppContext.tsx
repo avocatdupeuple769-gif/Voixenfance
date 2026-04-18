@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 
 export interface Report {
   id: string;
@@ -19,12 +19,14 @@ export interface Report {
 
 interface AppContextType {
   reports: Report[];
-  addReport: (report: Omit<Report, "id" | "submittedAt" | "status" | "trackingCode">) => string;
-  updateReportStatus: (id: string, status: Report["status"], adminNote?: string) => void;
+  addReport: (report: Omit<Report, "id" | "submittedAt" | "status" | "trackingCode">) => Promise<string>;
+  updateReportStatus: (id: string, status: Report["status"], adminNote?: string) => Promise<void>;
   getReportByCode: (code: string) => Report | undefined;
+  fetchReportByCode: (code: string) => Promise<Report | null>;
   isAdmin: boolean;
   adminLogin: (password: string) => boolean;
   adminLogout: () => void;
+  refreshReports: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | null>(null);
@@ -32,6 +34,8 @@ const AppContext = createContext<AppContextType | null>(null);
 const ADMIN_PASSWORD = "VoixEnfance2024!";
 const TAP_UNLOCK_TOKEN = "__tap_unlock__";
 const STORAGE_KEY = "@voixenfance_reports";
+
+const API_BASE = (process.env.EXPO_PUBLIC_API_URL || "").replace(/\/$/, "");
 
 function generateTrackingCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -41,6 +45,49 @@ function generateTrackingCode(): string {
     if (i === 3) code += "-";
   }
   return code;
+}
+
+async function apiPost(path: string, body: object): Promise<boolean> {
+  if (!API_BASE) return false;
+  try {
+    const res = await fetch(`${API_BASE}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function apiPatch(path: string, body: object): Promise<boolean> {
+  if (!API_BASE) return false;
+  try {
+    const res = await fetch(`${API_BASE}${path}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        "x-admin-key": ADMIN_PASSWORD,
+      },
+      body: JSON.stringify(body),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function apiFetch(path: string, adminKey?: string): Promise<Response | null> {
+  if (!API_BASE) return null;
+  try {
+    const headers: Record<string, string> = {};
+    if (adminKey) headers["x-admin-key"] = adminKey;
+    const res = await fetch(`${API_BASE}${path}`, { headers });
+    return res;
+  } catch {
+    return null;
+  }
 }
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
@@ -60,37 +107,128 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } catch {}
   };
 
-  const saveReports = async (newReports: Report[]) => {
+  const saveLocal = async (newReports: Report[]) => {
     try {
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(newReports));
     } catch {}
   };
 
-  const addReport = (reportData: Omit<Report, "id" | "submittedAt" | "status" | "trackingCode">): string => {
+  const refreshReports = useCallback(async () => {
+    if (!API_BASE) return;
+    try {
+      const res = await apiFetch("/reports", ADMIN_PASSWORD);
+      if (res && res.ok) {
+        const data = await res.json();
+        const normalised: Report[] = data.map((r: any) => ({
+          id: r.id,
+          trackingCode: r.trackingCode || r.tracking_code,
+          reporterName: r.reporterName || r.reporter_name,
+          reporterAge: r.reporterAge || r.reporter_age || "",
+          victimAge: r.victimAge || r.victim_age || "",
+          abuseType: (r.abuseType || r.abuse_type || "sexual") as Report["abuseType"],
+          description: r.description,
+          location: r.location || "",
+          mediaUri: r.mediaUri || r.media_uri,
+          mediaType: (r.mediaType || r.media_type) as Report["mediaType"],
+          submittedAt: typeof r.submittedAt === "string" ? r.submittedAt : new Date(r.submittedAt).toISOString(),
+          status: (r.status || "pending") as Report["status"],
+          adminNote: r.adminNote || r.admin_note,
+        }));
+        setReports(normalised);
+        saveLocal(normalised);
+      }
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    if (isAdmin) {
+      refreshReports();
+    }
+  }, [isAdmin, refreshReports]);
+
+  const addReport = async (
+    reportData: Omit<Report, "id" | "submittedAt" | "status" | "trackingCode">
+  ): Promise<string> => {
     const trackingCode = generateTrackingCode();
+    const id = Date.now().toString() + Math.random().toString(36).substr(2, 9);
+    const submittedAt = new Date().toISOString();
+
     const newReport: Report = {
       ...reportData,
-      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+      id,
       trackingCode,
-      submittedAt: new Date().toISOString(),
+      submittedAt,
       status: "pending",
     };
+
     const updated = [newReport, ...reports];
     setReports(updated);
-    saveReports(updated);
+    saveLocal(updated);
+
+    await apiPost("/reports", {
+      id,
+      trackingCode,
+      reporterName: reportData.reporterName,
+      reporterAge: reportData.reporterAge,
+      victimAge: reportData.victimAge,
+      abuseType: reportData.abuseType,
+      description: reportData.description,
+      location: reportData.location,
+      mediaUri: reportData.mediaUri,
+      mediaType: reportData.mediaType,
+      submittedAt,
+    });
+
     return trackingCode;
   };
 
-  const updateReportStatus = (id: string, status: Report["status"], adminNote?: string) => {
+  const updateReportStatus = async (
+    id: string,
+    status: Report["status"],
+    adminNote?: string
+  ) => {
     const updated = reports.map((r) =>
-      r.id === id ? { ...r, status, ...(adminNote ? { adminNote } : {}) } : r
+      r.id === id ? { ...r, status, ...(adminNote !== undefined ? { adminNote } : {}) } : r
     );
     setReports(updated);
-    saveReports(updated);
+    saveLocal(updated);
+
+    await apiPatch(`/reports/${id}/status`, { status, adminNote });
   };
 
   const getReportByCode = (code: string): Report | undefined => {
     return reports.find((r) => r.trackingCode.toLowerCase() === code.toLowerCase());
+  };
+
+  const fetchReportByCode = async (code: string): Promise<Report | null> => {
+    const normalised = code.toUpperCase();
+
+    const local = reports.find((r) => r.trackingCode.toLowerCase() === normalised.toLowerCase());
+    if (local) return local;
+
+    if (!API_BASE) return null;
+    try {
+      const res = await apiFetch(`/reports/code/${encodeURIComponent(normalised)}`);
+      if (res && res.ok) {
+        const data = await res.json();
+        return {
+          id: data.id,
+          trackingCode: data.trackingCode,
+          reporterName: "",
+          reporterAge: "",
+          victimAge: "",
+          abuseType: data.abuseType as Report["abuseType"],
+          description: "",
+          location: "",
+          submittedAt: data.submittedAt,
+          status: data.status as Report["status"],
+          adminNote: data.adminNote,
+        };
+      }
+      return null;
+    } catch {
+      return null;
+    }
   };
 
   const adminLogin = (password: string): boolean => {
@@ -107,7 +245,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AppContext.Provider
-      value={{ reports, addReport, updateReportStatus, getReportByCode, isAdmin, adminLogin, adminLogout }}
+      value={{
+        reports,
+        addReport,
+        updateReportStatus,
+        getReportByCode,
+        fetchReportByCode,
+        isAdmin,
+        adminLogin,
+        adminLogout,
+        refreshReports,
+      }}
     >
       {children}
     </AppContext.Provider>
