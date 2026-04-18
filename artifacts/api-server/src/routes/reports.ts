@@ -1,10 +1,11 @@
 import { Router, type IRouter } from "express";
-import { db, reportsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { store } from "../lib/store";
 
 const router: IRouter = Router();
 
-router.post("/reports", async (req, res) => {
+const ADMIN_KEY = process.env.ADMIN_SECRET || "VoixEnfance2024!";
+
+router.post("/reports", (req, res) => {
   try {
     const {
       id,
@@ -25,9 +26,9 @@ router.post("/reports", async (req, res) => {
       return;
     }
 
-    await db.insert(reportsTable).values({
+    store.insert({
       id,
-      trackingCode,
+      trackingCode: trackingCode.toUpperCase(),
       reporterName,
       reporterAge: reporterAge || "",
       victimAge: victimAge || "",
@@ -37,9 +38,10 @@ router.post("/reports", async (req, res) => {
       mediaUri: mediaUri || null,
       mediaType: mediaType || null,
       status: "pending",
-      submittedAt: submittedAt ? new Date(submittedAt) : new Date(),
-      updatedAt: new Date(),
-    }).onConflictDoNothing();
+      adminNote: null,
+      submittedAt: submittedAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
 
     res.status(201).json({ success: true, trackingCode });
   } catch (err) {
@@ -48,64 +50,47 @@ router.post("/reports", async (req, res) => {
   }
 });
 
-router.get("/reports/code/:code", async (req, res) => {
+router.get("/reports/code/:code", (req, res) => {
   try {
     const { code } = req.params;
-    const normalised = code.toUpperCase();
+    const report = store.getByCode(code.toUpperCase());
 
-    const results = await db
-      .select()
-      .from(reportsTable)
-      .where(eq(reportsTable.trackingCode, normalised))
-      .limit(1);
-
-    if (!results.length) {
+    if (!report) {
       res.status(404).json({ error: "Code introuvable" });
       return;
     }
 
-    const r = results[0];
     res.json({
-      id: r.id,
-      trackingCode: r.trackingCode,
-      abuseType: r.abuseType,
-      status: r.status,
-      adminNote: r.adminNote,
-      submittedAt: r.submittedAt.toISOString(),
+      id: report.id,
+      trackingCode: report.trackingCode,
+      abuseType: report.abuseType,
+      status: report.status,
+      adminNote: report.adminNote,
+      submittedAt: report.submittedAt,
     });
   } catch (err) {
-    console.error("Erreur recherche signalement:", err);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
 
-router.get("/reports", async (req, res) => {
+router.get("/reports", (req, res) => {
   try {
     const adminKey = req.headers["x-admin-key"];
-    if (adminKey !== process.env.ADMIN_SECRET && adminKey !== "VoixEnfance2024!") {
+    if (adminKey !== ADMIN_KEY) {
       res.status(403).json({ error: "Non autorisé" });
       return;
     }
 
-    const results = await db
-      .select()
-      .from(reportsTable)
-      .orderBy(reportsTable.submittedAt);
-
-    res.json(results.map(r => ({
-      ...r,
-      submittedAt: r.submittedAt.toISOString(),
-      updatedAt: r.updatedAt.toISOString(),
-    })));
+    res.json(store.getAll());
   } catch (err) {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
 
-router.patch("/reports/:id/status", async (req, res) => {
+router.patch("/reports/:id/status", (req, res) => {
   try {
     const adminKey = req.headers["x-admin-key"];
-    if (adminKey !== process.env.ADMIN_SECRET && adminKey !== "VoixEnfance2024!") {
+    if (adminKey !== ADMIN_KEY) {
       res.status(403).json({ error: "Non autorisé" });
       return;
     }
@@ -113,15 +98,7 @@ router.patch("/reports/:id/status", async (req, res) => {
     const { id } = req.params;
     const { status, adminNote } = req.body;
 
-    await db
-      .update(reportsTable)
-      .set({
-        status,
-        ...(adminNote !== undefined ? { adminNote } : {}),
-        updatedAt: new Date(),
-      })
-      .where(eq(reportsTable.id, id));
-
+    store.updateStatus(id, status, adminNote);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: "Erreur serveur" });
