@@ -1,6 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import React, { useState } from "react";
+import { useLocalSearchParams } from "expo-router";
+import React, { useEffect, useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -50,15 +51,36 @@ export default function TrackReportScreen() {
   const insets = useSafeAreaInsets();
   const { getReportByCode } = useApp();
   const isWeb = Platform.OS === "web";
+  const params = useLocalSearchParams<{ code?: string }>();
 
-  const [code, setCode] = useState("");
+  const [code, setCode] = useState(params.code || "");
   const [result, setResult] = useState<Report | null | "not_found">(null);
   const [searched, setSearched] = useState(false);
+
+  // Si un code est passé en paramètre, lancer la recherche automatiquement
+  useEffect(() => {
+    if (params.code && params.code.trim()) {
+      const normalised = normaliseCode(params.code.trim());
+      setCode(normalised);
+      const report = getReportByCode(normalised);
+      setResult(report ?? "not_found");
+      setSearched(true);
+    }
+  }, []);
+
+  // Normalise le code: accepte avec ou sans tiret
+  const normaliseCode = (raw: string): string => {
+    const clean = raw.toUpperCase().replace(/[^A-Z0-9]/g, "");
+    if (clean.length === 8) return `${clean.slice(0, 4)}-${clean.slice(4)}`;
+    return raw.toUpperCase();
+  };
 
   const handleSearch = () => {
     if (!code.trim()) return;
     Haptics.selectionAsync();
-    const report = getReportByCode(code.trim());
+    const normalised = normaliseCode(code.trim());
+    setCode(normalised);
+    const report = getReportByCode(normalised);
     if (report) {
       setResult(report);
     } else {
