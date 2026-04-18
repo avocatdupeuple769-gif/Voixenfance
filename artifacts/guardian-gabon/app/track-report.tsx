@@ -3,6 +3,7 @@ import * as Haptics from "expo-haptics";
 import { useLocalSearchParams } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -49,7 +50,7 @@ const ABUSE_LABELS = {
 export default function TrackReportScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { getReportByCode } = useApp();
+  const { getReportByCode, fetchReportByCode } = useApp();
   const isWeb = Platform.OS === "web";
   const params = useLocalSearchParams<{ code?: string }>();
 
@@ -62,9 +63,10 @@ export default function TrackReportScreen() {
     if (params.code && params.code.trim()) {
       const normalised = normaliseCode(params.code.trim());
       setCode(normalised);
-      const report = getReportByCode(normalised);
-      setResult(report ?? "not_found");
-      setSearched(true);
+      fetchReportByCode(normalised).then((report) => {
+        setResult(report ?? "not_found");
+        setSearched(true);
+      });
     }
   }, []);
 
@@ -75,18 +77,18 @@ export default function TrackReportScreen() {
     return raw.toUpperCase();
   };
 
-  const handleSearch = () => {
-    if (!code.trim()) return;
+  const [searching, setSearching] = useState(false);
+
+  const handleSearch = async () => {
+    if (!code.trim() || searching) return;
     Haptics.selectionAsync();
     const normalised = normaliseCode(code.trim());
     setCode(normalised);
-    const report = getReportByCode(normalised);
-    if (report) {
-      setResult(report);
-    } else {
-      setResult("not_found");
-    }
+    setSearching(true);
+    const report = await fetchReportByCode(normalised);
+    setResult(report ?? "not_found");
     setSearched(true);
+    setSearching(false);
   };
 
   const handleReset = () => {
@@ -154,11 +156,15 @@ export default function TrackReportScreen() {
               />
             </View>
             <TouchableOpacity
-              style={[styles.searchBtn, { backgroundColor: colors.primary }]}
+              style={[styles.searchBtn, { backgroundColor: colors.primary, opacity: searching ? 0.7 : 1 }]}
               onPress={handleSearch}
               activeOpacity={0.85}
+              disabled={searching}
             >
-              <Feather name="search" size={20} color="#fff" />
+              {searching
+                ? <ActivityIndicator size="small" color="#fff" />
+                : <Feather name="search" size={20} color="#fff" />
+              }
             </TouchableOpacity>
           </View>
         </View>
