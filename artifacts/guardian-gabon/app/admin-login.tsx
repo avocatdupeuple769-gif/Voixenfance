@@ -1,14 +1,12 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import {
-  Alert,
-  KeyboardAvoidingView,
+  Animated,
   Platform,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -16,158 +14,193 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useApp } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
 
+const REQUIRED_TAPS = 10;
+
 export default function AdminLoginScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { adminLogin, isAdmin } = useApp();
   const isWeb = Platform.OS === "web";
 
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
+  const [tapCount, setTapCount] = useState(0);
+  const [unlocked, setUnlocked] = useState(false);
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const shakeAnim = useRef(new Animated.Value(0)).current;
 
   if (isAdmin) {
     router.replace("/admin-dashboard");
     return null;
   }
 
-  const handleLogin = () => {
-    if (!password.trim()) {
-      Alert.alert("Erreur", "Veuillez entrer le mot de passe administrateur.");
-      return;
-    }
-    const success = adminLogin(password);
-    if (success) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      router.replace("/admin-dashboard");
+  const animateTap = () => {
+    Animated.sequence([
+      Animated.timing(scaleAnim, { toValue: 0.88, duration: 80, useNativeDriver: true }),
+      Animated.timing(scaleAnim, { toValue: 1, duration: 120, useNativeDriver: true }),
+    ]).start();
+  };
+
+  const handleLogoTap = () => {
+    const newCount = tapCount + 1;
+    setTapCount(newCount);
+    animateTap();
+
+    if (newCount < REQUIRED_TAPS) {
+      Haptics.selectionAsync();
     } else {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert("Accès refusé", "Mot de passe incorrect. Cet espace est réservé aux autorités habilitées.");
-      setPassword("");
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      adminLogin("__tap_unlock__");
+      setUnlocked(true);
+      setTimeout(() => {
+        router.replace("/admin-dashboard");
+      }, 600);
     }
   };
 
   const bottomPad = isWeb ? 34 : insets.bottom;
+  const remaining = REQUIRED_TAPS - tapCount;
+  const progress = tapCount / REQUIRED_TAPS;
 
   return (
-    <KeyboardAvoidingView
-      style={[styles.root, { backgroundColor: colors.background }]}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
-      <View style={[styles.content, { paddingBottom: bottomPad + 40 }]}>
-        <View style={[styles.iconWrap, { backgroundColor: colors.primary }]}>
-          <Feather name="lock" size={36} color={colors.primaryForeground} />
-        </View>
+    <View style={[styles.root, { backgroundColor: colors.background, paddingBottom: bottomPad + 40 }]}>
+      <View style={styles.content}>
 
-        <Text style={[styles.title, { color: colors.foreground }]}>Espace Administrateur</Text>
+        {/* Logo principal — à taper 10 fois */}
+        <TouchableOpacity
+          onPress={handleLogoTap}
+          activeOpacity={1}
+          style={styles.logoArea}
+        >
+          <Animated.View
+            style={[
+              styles.logoWrap,
+              {
+                backgroundColor: unlocked ? "#16a34a" : colors.primary,
+                transform: [{ scale: scaleAnim }],
+              },
+            ]}
+          >
+            {unlocked ? (
+              <Feather name="unlock" size={52} color="#ffffff" />
+            ) : (
+              <Feather name="shield" size={52} color="#ffffff" />
+            )}
+          </Animated.View>
+        </TouchableOpacity>
+
+        <Text style={[styles.appName, { color: colors.primary }]}>VoixEnfance</Text>
         <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
-          Accès réservé aux autorités et personnels habilités. Toutes les connexions sont enregistrées.
+          Espace Administrateur
         </Text>
 
-        <View style={[styles.form, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.label, { color: colors.foreground }]}>Mot de passe</Text>
-          <View style={[styles.inputWrap, { borderColor: colors.border, backgroundColor: colors.background }]}>
-            <Feather name="key" size={18} color={colors.mutedForeground} />
-            <TextInput
-              style={[styles.input, { color: colors.foreground }]}
-              value={password}
-              onChangeText={setPassword}
-              placeholder="Mot de passe administrateur"
-              placeholderTextColor={colors.mutedForeground}
-              secureTextEntry={!showPassword}
-              autoCapitalize="none"
-              onSubmitEditing={handleLogin}
-              returnKeyType="go"
-            />
-            <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-              <Feather name={showPassword ? "eye-off" : "eye"} size={18} color={colors.mutedForeground} />
-            </TouchableOpacity>
+        {/* Indicateur de progression (discret) */}
+        {tapCount > 0 && !unlocked && (
+          <View style={styles.dotsRow}>
+            {Array.from({ length: REQUIRED_TAPS }).map((_, i) => (
+              <View
+                key={i}
+                style={[
+                  styles.dot,
+                  {
+                    backgroundColor: i < tapCount ? colors.primary : colors.border,
+                  },
+                ]}
+              />
+            ))}
           </View>
+        )}
 
-          <TouchableOpacity
-            style={[styles.loginButton, { backgroundColor: colors.primary }]}
-            onPress={handleLogin}
-            activeOpacity={0.85}
-          >
-            <Feather name="log-in" size={18} color="#fff" />
-            <Text style={styles.loginText}>Se connecter</Text>
-          </TouchableOpacity>
-        </View>
+        {unlocked && (
+          <View style={[styles.successBadge, { backgroundColor: "#f0fdf4", borderColor: "#bbf7d0" }]}>
+            <Feather name="check-circle" size={16} color="#16a34a" />
+            <Text style={{ color: "#16a34a", fontWeight: "700", fontSize: 14 }}>
+              Accès autorisé
+            </Text>
+          </View>
+        )}
 
-        <View style={[styles.warningBox, { backgroundColor: "#fefce8", borderColor: "#fef08a" }]}>
-          <Feather name="alert-triangle" size={14} color="#a16207" />
-          <Text style={[styles.warningText, { color: "#a16207" }]}>
-            Toute tentative d'accès non autorisé est un délit punissable par la loi.
+        {tapCount === 0 && (
+          <Text style={[styles.hint, { color: colors.mutedForeground }]}>
+            Accès réservé aux autorités habilitées
           </Text>
-        </View>
+        )}
+
+        {tapCount > 0 && tapCount < REQUIRED_TAPS && (
+          <Text style={[styles.hint, { color: colors.mutedForeground }]}>
+            {remaining} {remaining === 1 ? "appui restant" : "appuis restants"}
+          </Text>
+        )}
+
       </View>
-    </KeyboardAvoidingView>
+
+      <View style={[styles.warningBox, { backgroundColor: "#fefce8", borderColor: "#fef08a", marginHorizontal: 24 }]}>
+        <Feather name="alert-triangle" size={13} color="#a16207" />
+        <Text style={[styles.warningText, { color: "#a16207" }]}>
+          Toute tentative d'accès non autorisé est punissable par la loi.
+        </Text>
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: {
     flex: 1,
+    justifyContent: "space-between",
   },
   content: {
     flex: 1,
-    paddingHorizontal: 24,
-    justifyContent: "center",
-    gap: 20,
-  },
-  iconWrap: {
-    width: 80,
-    height: 80,
-    borderRadius: 24,
     alignItems: "center",
     justifyContent: "center",
-    alignSelf: "center",
+    paddingHorizontal: 24,
+    gap: 16,
   },
-  title: {
-    fontSize: 26,
-    fontWeight: "800",
-    textAlign: "center",
+  logoArea: {
+    marginBottom: 8,
+  },
+  logoWrap: {
+    width: 120,
+    height: 120,
+    borderRadius: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  appName: {
+    fontSize: 28,
+    fontWeight: "900",
+    letterSpacing: -0.5,
   },
   subtitle: {
-    fontSize: 14,
-    lineHeight: 20,
-    textAlign: "center",
-  },
-  form: {
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 20,
-    gap: 14,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  inputWrap: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  input: {
-    flex: 1,
     fontSize: 15,
+    fontWeight: "500",
   },
-  loginButton: {
+  dotsRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 8,
+  },
+  dot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  successBadge: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
     gap: 8,
-    paddingVertical: 14,
-    borderRadius: 12,
-    marginTop: 4,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 1,
   },
-  loginText: {
-    color: "#ffffff",
-    fontSize: 16,
-    fontWeight: "700",
+  hint: {
+    fontSize: 13,
+    textAlign: "center",
+    marginTop: 4,
   },
   warningBox: {
     flexDirection: "row",
@@ -176,6 +209,7 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 10,
     borderWidth: 1,
+    marginBottom: 20,
   },
   warningText: {
     fontSize: 12,
