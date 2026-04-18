@@ -57,9 +57,7 @@
       "reactCompiler": true
     },
     "extra": {
-      "eas": {
-        "projectId": "voixenfance-gabon"
-      }
+      "eas": {}
     }
   }
 }
