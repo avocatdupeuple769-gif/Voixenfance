@@ -23,9 +23,7 @@ export default function AdminLoginScreen() {
   const isWeb = Platform.OS === "web";
 
   const [tapCount, setTapCount] = useState(0);
-  const [unlocked, setUnlocked] = useState(false);
   const scaleAnim = useRef(new Animated.Value(1)).current;
-  const shakeAnim = useRef(new Animated.Value(0)).current;
 
   if (isAdmin) {
     router.replace("/admin-dashboard");
@@ -49,22 +47,17 @@ export default function AdminLoginScreen() {
     } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       adminLogin("__tap_unlock__");
-      setUnlocked(true);
-      setTimeout(() => {
-        router.replace("/admin-dashboard");
-      }, 600);
+      router.replace("/admin-dashboard");
     }
   };
 
   const bottomPad = isWeb ? 34 : insets.bottom;
-  const remaining = REQUIRED_TAPS - tapCount;
-  const progress = tapCount / REQUIRED_TAPS;
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background, paddingBottom: bottomPad + 40 }]}>
       <View style={styles.content}>
 
-        {/* Logo principal — à taper 10 fois */}
+        {/* Logo principal — taper 10 fois silencieusement */}
         <TouchableOpacity
           onPress={handleLogoTap}
           activeOpacity={1}
@@ -74,16 +67,12 @@ export default function AdminLoginScreen() {
             style={[
               styles.logoWrap,
               {
-                backgroundColor: unlocked ? "#16a34a" : colors.primary,
+                backgroundColor: colors.primary,
                 transform: [{ scale: scaleAnim }],
               },
             ]}
           >
-            {unlocked ? (
-              <Feather name="unlock" size={52} color="#ffffff" />
-            ) : (
-              <Feather name="shield" size={52} color="#ffffff" />
-            )}
+            <Feather name="shield" size={52} color="#ffffff" />
           </Animated.View>
         </TouchableOpacity>
 
@@ -91,44 +80,9 @@ export default function AdminLoginScreen() {
         <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
           Espace Administrateur
         </Text>
-
-        {/* Indicateur de progression (discret) */}
-        {tapCount > 0 && !unlocked && (
-          <View style={styles.dotsRow}>
-            {Array.from({ length: REQUIRED_TAPS }).map((_, i) => (
-              <View
-                key={i}
-                style={[
-                  styles.dot,
-                  {
-                    backgroundColor: i < tapCount ? colors.primary : colors.border,
-                  },
-                ]}
-              />
-            ))}
-          </View>
-        )}
-
-        {unlocked && (
-          <View style={[styles.successBadge, { backgroundColor: "#f0fdf4", borderColor: "#bbf7d0" }]}>
-            <Feather name="check-circle" size={16} color="#16a34a" />
-            <Text style={{ color: "#16a34a", fontWeight: "700", fontSize: 14 }}>
-              Accès autorisé
-            </Text>
-          </View>
-        )}
-
-        {tapCount === 0 && (
-          <Text style={[styles.hint, { color: colors.mutedForeground }]}>
-            Accès réservé aux autorités habilitées
-          </Text>
-        )}
-
-        {tapCount > 0 && tapCount < REQUIRED_TAPS && (
-          <Text style={[styles.hint, { color: colors.mutedForeground }]}>
-            {remaining} {remaining === 1 ? "appui restant" : "appuis restants"}
-          </Text>
-        )}
+        <Text style={[styles.hint, { color: colors.mutedForeground }]}>
+          Accès réservé aux autorités habilitées
+        </Text>
 
       </View>
 
@@ -152,7 +106,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 24,
-    gap: 16,
+    gap: 12,
   },
   logoArea: {
     marginBottom: 8,
@@ -177,25 +131,6 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 15,
     fontWeight: "500",
-  },
-  dotsRow: {
-    flexDirection: "row",
-    gap: 8,
-    marginTop: 8,
-  },
-  dot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-  },
-  successBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    borderWidth: 1,
   },
   hint: {
     fontSize: 13,
