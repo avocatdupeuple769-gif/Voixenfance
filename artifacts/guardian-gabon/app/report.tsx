@@ -75,7 +75,7 @@ export default function ReportScreen() {
     ]);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!reporterName.trim()) {
       Alert.alert("Erreur", "Veuillez entrer votre nom complet.");
       return;
@@ -96,8 +96,8 @@ export default function ReportScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setSubmitting(true);
 
-    setTimeout(() => {
-      const code = addReport({
+    try {
+      const code = await addReport({
         reporterName: reporterName.trim(),
         reporterAge: reporterAge.trim(),
         victimAge: victimAge.trim(),
@@ -110,7 +110,9 @@ export default function ReportScreen() {
       setSubmitting(false);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.replace({ pathname: "/report-success", params: { code } });
-    }, 1000);
+    } catch {
+      setSubmitting(false);
+    }
   };
 
   const bottomPad = isWeb ? 34 : insets.bottom;
