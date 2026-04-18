@@ -1,16 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as Device from "expo-device";
-import * as Notifications from "expo-notifications";
-import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
-import { Alert, Platform } from "react-native";
-
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
-});
+import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 
 export interface Report {
   id: string;
@@ -37,9 +26,7 @@ interface AppContextType {
   isAdmin: boolean;
   adminLogin: (password: string) => boolean;
   adminLogout: () => void;
-  refreshReports: () => Promise<void>;
-  sendAlarm: (message?: string) => Promise<{ sent: number; total: number }>;
-  deviceCount: number;
+  refreshReports: () => Promise<{ newCount: number }>;
 }
 
 const AppContext = createContext<AppContextType | null>(null);
@@ -47,7 +34,7 @@ const AppContext = createContext<AppContextType | null>(null);
 const ADMIN_PASSWORD = "VoixEnfance2024!";
 const TAP_UNLOCK_TOKEN = "__tap_unlock__";
 const STORAGE_KEY = "@voixenfance_reports";
-const EXPO_PROJECT_ID = "b6e193a6-f274-48a3-b936-fb6777afdfd6";
+const SEEN_IDS_KEY = "@voixenfance_seen_ids";
 
 const API_BASE = (process.env.EXPO_PUBLIC_API_URL || "").replace(/\/$/, "");
 
@@ -61,19 +48,17 @@ function generateTrackingCode(): string {
   return code;
 }
 
-async function apiPost(path: string, body: object, adminKey?: string): Promise<Response | null> {
-  if (!API_BASE) return null;
+async function apiPost(path: string, body: object): Promise<boolean> {
+  if (!API_BASE) return false;
   try {
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-    if (adminKey) headers["x-admin-key"] = adminKey;
     const res = await fetch(`${API_BASE}${path}`, {
       method: "POST",
-      headers,
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    return res;
+    return res.ok;
   } catch {
-    return null;
+    return false;
   }
 }
 
@@ -106,86 +91,18 @@ async function apiFetch(path: string, adminKey?: string): Promise<Response | nul
   }
 }
 
-async function registerPushToken(): Promise<string | null> {
-  if (Platform.OS === "web") return null;
-  if (!Device.isDevice) return null;
-
-  try {
-    const { status: existingStatus } = await Notifications.getPermissionsAsync();
-    let finalStatus = existingStatus;
-
-    if (existingStatus !== "granted") {
-      const { status } = await Notifications.requestPermissionsAsync();
-      finalStatus = status;
-    }
-
-    if (finalStatus !== "granted") return null;
-
-    if (Platform.OS === "android") {
-      await Notifications.setNotificationChannelAsync("alarme", {
-        name: "Alarmes VoixEnfance",
-        importance: Notifications.AndroidImportance.MAX,
-        vibrationPattern: [0, 500, 250, 500],
-        sound: "default",
-        enableVibrate: true,
-        lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-        bypassDnd: true,
-      });
-    }
-
-    const token = await Notifications.getExpoPushTokenAsync({
-      projectId: EXPO_PROJECT_ID,
-    });
-
-    return token.data;
-  } catch {
-    return null;
-  }
-}
-
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [reports, setReports] = useState<Report[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [deviceCount, setDeviceCount] = useState(0);
-  const notifListener = useRef<Notifications.EventSubscription | null>(null);
-  const responseListener = useRef<Notifications.EventSubscription | null>(null);
 
   useEffect(() => {
     loadReports();
-    setupNotifications();
-
-    return () => {
-      notifListener.current?.remove();
-      responseListener.current?.remove();
-    };
   }, []);
-
-  const setupNotifications = async () => {
-    const token = await registerPushToken();
-    if (token && API_BASE) {
-      await apiPost("/push-tokens", { token });
-    }
-
-    notifListener.current = Notifications.addNotificationReceivedListener((notif) => {
-      const data = notif.request.content.data as { type?: string };
-      if (data?.type === "alarm") {
-        Alert.alert(
-          "🚨 ALERTE URGENCE",
-          notif.request.content.body || "Un enfant a besoin d'aide. Contactez les autorités.",
-          [{ text: "Compris", style: "destructive" }]
-        );
-      }
-    });
-
-    responseListener.current = Notifications.addNotificationResponseReceivedListener(() => {});
-  };
 
   const loadReports = async () => {
     try {
       const stored = await AsyncStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        setReports(JSON.parse(stored));
-      }
+      if (stored) setReports(JSON.parse(stored));
     } catch {}
   };
 
@@ -195,8 +112,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } catch {}
   };
 
-  const refreshReports = useCallback(async () => {
-    if (!API_BASE) return;
+  const refreshReports = useCallback(async (): Promise<{ newCount: number }> => {
+    if (!API_BASE) return { newCount: 0 };
     try {
       const res = await apiFetch("/reports", ADMIN_PASSWORD);
       if (res && res.ok) {
@@ -216,16 +133,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           status: (r.status || "pending") as Report["status"],
           adminNote: r.adminNote || r.admin_note,
         }));
+
+        const seenRaw = await AsyncStorage.getItem(SEEN_IDS_KEY);
+        const seenIds: string[] = seenRaw ? JSON.parse(seenRaw) : [];
+        const newOnes = normalised.filter((r) => !seenIds.includes(r.id));
+        const allIds = normalised.map((r) => r.id);
+        await AsyncStorage.setItem(SEEN_IDS_KEY, JSON.stringify(allIds));
+
         setReports(normalised);
         saveLocal(normalised);
-      }
-
-      const devRes = await apiFetch("/alarm/devices", ADMIN_PASSWORD);
-      if (devRes && devRes.ok) {
-        const devData = await devRes.json();
-        setDeviceCount(devData.count || 0);
+        return { newCount: newOnes.length };
       }
     } catch {}
+    return { newCount: 0 };
   }, []);
 
   useEffect(() => {
@@ -317,18 +237,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const sendAlarm = async (message?: string): Promise<{ sent: number; total: number }> => {
-    if (!API_BASE) return { sent: 0, total: 0 };
-    try {
-      const res = await apiPost("/alarm", { message }, ADMIN_PASSWORD);
-      if (res && res.ok) {
-        const data = await res.json();
-        return { sent: data.sent || 0, total: data.total || 0 };
-      }
-    } catch {}
-    return { sent: 0, total: 0 };
-  };
-
   const adminLogin = (password: string): boolean => {
     if (password === ADMIN_PASSWORD || password === TAP_UNLOCK_TOKEN) {
       setIsAdmin(true);
@@ -337,9 +245,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return false;
   };
 
-  const adminLogout = () => {
-    setIsAdmin(false);
-  };
+  const adminLogout = () => setIsAdmin(false);
 
   return (
     <AppContext.Provider
@@ -353,8 +259,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         adminLogin,
         adminLogout,
         refreshReports,
-        sendAlarm,
-        deviceCount,
       }}
     >
       {children}
