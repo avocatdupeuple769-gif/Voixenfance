@@ -65,7 +65,7 @@ jobs:
         working-directory: artifacts/guardian-gabon
         run: |
           echo "EXPO_PUBLIC_SUPABASE_URL=https://ilzrzwuhfraywjdlbtqf.supabase.co" > .env
-          echo "EXPO_PUBLIC_SUPABASE_KEY=sb_publishable_Ciy2zPaTFQU5_MZ5Tt3b2Q_2uFhB6ST" >> .env
+          echo "EXPO_PUBLIC_SUPABASE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlsenJ6d3VoZnJheXdqZGxidHFmIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NjYwOTQ2OCwiZXhwIjoyMDkyMTg1NDY4fQ.dqP30mpxRkCmg0nIFHSPLnol-y46u33CQONSYGyWDSg" >> .env
           cp .env .env.production
           cat .env
 
@@ -76,7 +76,7 @@ jobs:
           EXPO_NO_TELEMETRY: 1
           CI: 1
           EXPO_PUBLIC_SUPABASE_URL: https://ilzrzwuhfraywjdlbtqf.supabase.co
-          EXPO_PUBLIC_SUPABASE_KEY: sb_publishable_Ciy2zPaTFQU5_MZ5Tt3b2Q_2uFhB6ST
+          EXPO_PUBLIC_SUPABASE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlsenJ6d3VoZnJheXdqZGxidHFmIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NjYwOTQ2OCwiZXhwIjoyMDkyMTg1NDY4fQ.dqP30mpxRkCmg0nIFHSPLnol-y46u33CQONSYGyWDSg
 
       - name: Make Gradle executable
         working-directory: artifacts/guardian-gabon/android
@@ -97,7 +97,7 @@ jobs:
         env:
           GRADLE_OPTS: -Xmx4g -XX:MaxMetaspaceSize=512m
           EXPO_PUBLIC_SUPABASE_URL: https://ilzrzwuhfraywjdlbtqf.supabase.co
-          EXPO_PUBLIC_SUPABASE_KEY: sb_publishable_Ciy2zPaTFQU5_MZ5Tt3b2Q_2uFhB6ST
+          EXPO_PUBLIC_SUPABASE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlsenJ6d3VoZnJheXdqZGxidHFmIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NjYwOTQ2OCwiZXhwIjoyMDkyMTg1NDY4fQ.dqP30mpxRkCmg0nIFHSPLnol-y46u33CQONSYGyWDSg
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
