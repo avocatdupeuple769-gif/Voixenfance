@@ -66,6 +66,16 @@ function RootLayoutNav() {
           headerTitleStyle: { fontWeight: "700" as const },
         }}
       />
+      <Stack.Screen
+        name="privacy-policy"
+        options={{
+          title: "Confidentialité",
+          headerBackTitle: "Retour",
+          headerStyle: { backgroundColor: "#1a3a6b" },
+          headerTintColor: "#ffffff",
+          headerTitleStyle: { fontWeight: "700" as const },
+        }}
+      />
       <Stack.Screen name="admin-dashboard" options={{ headerShown: false }} />
     </Stack>
   );
