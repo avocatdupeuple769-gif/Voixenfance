@@ -106,7 +106,7 @@ export default function WelcomeScreen() {
         <Animated.View entering={FadeInUp.delay(800).duration(600)} style={styles.descBlock}>
           {[
             { icon: "user-x" as const, text: "Signalez anonymement — votre identité est protégée" },
-            { icon: "search" as const, text: "Suivez votre dossier avec un code confidentiel" },
+            { icon: "camera" as const, text: "Joignez des photos ou vidéos comme preuves" },
             { icon: "phone-call" as const, text: "Numéros d'urgence disponibles 24h/24" },
             { icon: "life-buoy" as const, text: "Ressources d'aide : ONG, soutien psychologique" },
           ].map((item, i) => (
