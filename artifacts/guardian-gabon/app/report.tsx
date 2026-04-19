@@ -147,8 +147,15 @@ export default function ReportScreen() {
       setSubmitting(false);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.replace("/report-success");
-    } catch {
+    } catch (e) {
       setSubmitting(false);
+      Alert.alert(
+        "Échec de l'envoi",
+        e instanceof Error
+          ? e.message
+          : "Impossible d'envoyer le signalement. Vérifiez votre connexion Internet et réessayez.",
+        [{ text: "OK" }]
+      );
     }
   };
 
