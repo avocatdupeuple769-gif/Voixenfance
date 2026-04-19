@@ -99,15 +99,7 @@ export function ReportCard({ report, onPress, isAdmin = false, onQuickStatus, on
                 {report.reporterName}, {report.reporterAge} ans
               </Text>
             </View>
-            {report.trackingCode ? (
-              <View style={styles.infoItem}>
-                <Feather name="hash" size={12} color="#15803d" />
-                <Text style={[styles.infoText, { color: "#15803d", fontWeight: "700" }]}>
-                  {report.trackingCode}
-                </Text>
-              </View>
-            ) : null}
-            {report.location ? (
+              {report.location ? (
               <View style={styles.infoItem}>
                 <Feather name="map-pin" size={12} color={colors.mutedForeground} />
                 <Text style={[styles.infoText, { color: colors.mutedForeground }]} numberOfLines={1}>
