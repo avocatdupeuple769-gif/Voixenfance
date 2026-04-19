@@ -36,7 +36,8 @@ const TAP_UNLOCK_TOKEN = "__tap_unlock__";
 const STORAGE_KEY = "@voixenfance_reports";
 const SEEN_IDS_KEY = "@voixenfance_seen_ids";
 
-const API_BASE = (process.env.EXPO_PUBLIC_API_URL || "").replace(/\/$/, "");
+const HARDCODED_API = "https://8f21e1a5-ad38-45c5-a6a0-72627d76e9b8-00-wcwvkfi8xl4x.picard.replit.dev/api";
+const API_BASE = (process.env.EXPO_PUBLIC_API_URL || HARDCODED_API).replace(/\/$/, "");
 
 function generateTrackingCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
