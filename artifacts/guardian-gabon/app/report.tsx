@@ -54,8 +54,15 @@ export default function ReportScreen() {
             quality: 0.7,
           });
           if (!result.canceled && result.assets[0]) {
-            setMediaUri(result.assets[0].uri);
-            setMediaMimeType(result.assets[0].mimeType || "image/jpeg");
+            const asset = result.assets[0];
+            // Detect MIME from URI extension if not provided
+            const uriLower = asset.uri.toLowerCase();
+            const mime = asset.mimeType ||
+              (uriLower.includes(".png") ? "image/png" :
+               uriLower.includes(".heic") || uriLower.includes(".heif") ? "image/heic" :
+               "image/jpeg");
+            setMediaUri(asset.uri);
+            setMediaMimeType(mime);
             setMediaType("photo");
           }
         },
@@ -68,8 +75,12 @@ export default function ReportScreen() {
             quality: 0.6,
           });
           if (!result.canceled && result.assets[0]) {
-            setMediaUri(result.assets[0].uri);
-            setMediaMimeType(result.assets[0].mimeType || "video/mp4");
+            const asset = result.assets[0];
+            const uriLower = asset.uri.toLowerCase();
+            const mime = asset.mimeType ||
+              (uriLower.includes(".mov") ? "video/quicktime" : "video/mp4");
+            setMediaUri(asset.uri);
+            setMediaMimeType(mime);
             setMediaType("video");
           }
         },
