@@ -17,7 +17,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ReportCard } from "@/components/ReportCard";
-import { useApp, type Report, API_BASE } from "@/context/AppContext";
+import { useApp, type Report } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
 
 type FilterStatus = "all" | "pending" | "reviewed" | "closed";
@@ -237,9 +237,7 @@ function AdminReportDetail({
   const [adminNote, setAdminNote] = useState(report.adminNote || "");
   const [imgError, setImgError] = useState(false);
 
-  const mediaUrl = report.mediaUri?.startsWith("/media/")
-    ? `${API_BASE}${report.mediaUri}`
-    : report.mediaUri;
+  const mediaUrl = report.mediaUri || undefined;
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
