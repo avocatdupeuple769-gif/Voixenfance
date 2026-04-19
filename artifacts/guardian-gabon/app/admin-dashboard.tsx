@@ -1,5 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { Image } from "expo-image";
+import * as Linking from "expo-linking";
 import { router } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
@@ -15,7 +17,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ReportCard } from "@/components/ReportCard";
-import { useApp, type Report } from "@/context/AppContext";
+import { useApp, type Report, API_BASE } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
 
 type FilterStatus = "all" | "pending" | "reviewed" | "closed";
@@ -23,7 +25,7 @@ type FilterStatus = "all" | "pending" | "reviewed" | "closed";
 export default function AdminDashboardScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { reports, adminLogout, isAdmin, updateReportStatus, refreshReports } = useApp();
+  const { reports, adminLogout, isAdmin, updateReportStatus, deleteReport, refreshReports } = useApp();
   const isWeb = Platform.OS === "web";
   const [filter, setFilter] = useState<FilterStatus>("all");
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
@@ -31,11 +33,7 @@ export default function AdminDashboardScreen() {
 
   useEffect(() => {
     handleRefresh();
-
-    const interval = setInterval(() => {
-      handleRefreshSilent();
-    }, 30000);
-
+    const interval = setInterval(() => { handleRefreshSilent(); }, 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -53,7 +51,6 @@ export default function AdminDashboardScreen() {
     setRefreshing(true);
     const { newCount } = await refreshReports();
     setRefreshing(false);
-
     if (newCount > 0) {
       for (let i = 0; i < newCount; i++) {
         await new Promise((r) => setTimeout(r, i * 400));
@@ -67,9 +64,7 @@ export default function AdminDashboardScreen() {
     return null;
   }
 
-  const filteredReports =
-    filter === "all" ? reports : reports.filter((r) => r.status === filter);
-
+  const filteredReports = filter === "all" ? reports : reports.filter((r) => r.status === filter);
   const pendingCount = reports.filter((r) => r.status === "pending").length;
   const reviewedCount = reports.filter((r) => r.status === "reviewed").length;
   const closedCount = reports.filter((r) => r.status === "closed").length;
@@ -80,12 +75,28 @@ export default function AdminDashboardScreen() {
       {
         text: "Déconnexion",
         style: "destructive",
-        onPress: () => {
-          adminLogout();
-          router.replace("/home");
-        },
+        onPress: () => { adminLogout(); router.replace("/home"); },
       },
     ]);
+  };
+
+  const handleDelete = (report: Report) => {
+    Alert.alert(
+      "Supprimer ce signalement",
+      `Voulez-vous supprimer définitivement ce signalement ? Cette action est irréversible.`,
+      [
+        { text: "Annuler", style: "cancel" },
+        {
+          text: "Supprimer",
+          style: "destructive",
+          onPress: async () => {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+            if (selectedReport?.id === report.id) setSelectedReport(null);
+            await deleteReport(report.id);
+          },
+        },
+      ]
+    );
   };
 
   if (selectedReport) {
@@ -98,6 +109,7 @@ export default function AdminDashboardScreen() {
           setSelectedReport({ ...selectedReport, status, ...(adminNote ? { adminNote } : {}) });
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         }}
+        onDelete={() => handleDelete(selectedReport)}
         colors={colors}
         insets={insets}
         isWeb={isWeb}
@@ -121,11 +133,7 @@ export default function AdminDashboardScreen() {
             <Text style={styles.headerSubtitle}>{reports.length} signalement(s) total</Text>
           </View>
           <View style={{ flexDirection: "row", gap: 10 }}>
-            <TouchableOpacity
-              style={styles.iconBtn}
-              onPress={handleRefresh}
-              disabled={refreshing}
-            >
+            <TouchableOpacity style={styles.iconBtn} onPress={handleRefresh} disabled={refreshing}>
               <Feather name="refresh-cw" size={20} color={refreshing ? "rgba(255,255,255,0.4)" : "#ffffff"} />
             </TouchableOpacity>
             <TouchableOpacity style={styles.iconBtn} onPress={handleLogout}>
@@ -163,27 +171,12 @@ export default function AdminDashboardScreen() {
             ]}
             onPress={() => setFilter(f.key)}
           >
-            <Text
-              style={[
-                styles.filterText,
-                { color: filter === f.key ? colors.primaryForeground : colors.foreground },
-              ]}
-            >
+            <Text style={[styles.filterText, { color: filter === f.key ? colors.primaryForeground : colors.foreground }]}>
               {f.label}
             </Text>
             {f.count > 0 && (
-              <View
-                style={[
-                  styles.badge,
-                  { backgroundColor: filter === f.key ? "rgba(255,255,255,0.3)" : colors.muted },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.badgeText,
-                    { color: filter === f.key ? "#fff" : colors.mutedForeground },
-                  ]}
-                >
+              <View style={[styles.badge, { backgroundColor: filter === f.key ? "rgba(255,255,255,0.3)" : colors.muted }]}>
+                <Text style={[styles.badgeText, { color: filter === f.key ? "#fff" : colors.mutedForeground }]}>
                   {f.count}
                 </Text>
               </View>
@@ -195,10 +188,7 @@ export default function AdminDashboardScreen() {
       <FlatList
         data={filteredReports}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={[
-          styles.list,
-          { paddingBottom: (isWeb ? 34 : insets.bottom) + 20 },
-        ]}
+        contentContainerStyle={[styles.list, { paddingBottom: (isWeb ? 34 : insets.bottom) + 20 }]}
         renderItem={({ item }) => (
           <ReportCard
             report={item}
@@ -208,6 +198,7 @@ export default function AdminDashboardScreen() {
               updateReportStatus(item.id, status);
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             }}
+            onDelete={() => handleDelete(item)}
           />
         )}
         ListEmptyComponent={
@@ -228,6 +219,7 @@ function AdminReportDetail({
   report,
   onClose,
   onUpdateStatus,
+  onDelete,
   colors,
   insets,
   isWeb,
@@ -235,6 +227,7 @@ function AdminReportDetail({
   report: Report;
   onClose: () => void;
   onUpdateStatus: (s: Report["status"], adminNote?: string) => void;
+  onDelete: () => void;
   colors: ReturnType<typeof import("@/hooks/useColors").useColors>;
   insets: { top: number; bottom: number };
   isWeb: boolean;
@@ -242,6 +235,11 @@ function AdminReportDetail({
   const date = new Date(report.submittedAt).toLocaleString("fr-GA");
   const ABUSE_LABELS = { sexual: "Abus sexuel", violence: "Violence", both: "Abus sexuel & Violence" };
   const [adminNote, setAdminNote] = useState(report.adminNote || "");
+  const [imgError, setImgError] = useState(false);
+
+  const mediaUrl = report.mediaUri?.startsWith("/media/")
+    ? `${API_BASE}${report.mediaUri}`
+    : report.mediaUri;
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
@@ -250,7 +248,9 @@ function AdminReportDetail({
           <Feather name="arrow-left" size={22} color="#fff" />
         </TouchableOpacity>
         <Text style={styles.detailTitle}>Détail du signalement</Text>
-        <View style={{ width: 22 }} />
+        <TouchableOpacity onPress={onDelete} style={[styles.backBtn, { backgroundColor: "rgba(239,68,68,0.3)" }]}>
+          <Feather name="trash-2" size={18} color="#fca5a5" />
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -260,7 +260,7 @@ function AdminReportDetail({
         <View style={[styles.detailCard, { backgroundColor: "#f0fdf4", borderColor: "#bbf7d0" }]}>
           <View style={styles.codeRow}>
             <Feather name="hash" size={15} color="#15803d" />
-            <Text style={[styles.detailSection, { color: "#15803d", marginBottom: 0 }]}>Code de suivi du signalant</Text>
+            <Text style={[styles.detailSection, { color: "#15803d", marginBottom: 0 }]}>Code de suivi</Text>
           </View>
           <View style={[styles.codeBox, { backgroundColor: "#dcfce7" }]}>
             <Text style={[styles.codeText, { color: "#166534" }]}>{report.trackingCode || "N/A"}</Text>
@@ -281,36 +281,62 @@ function AdminReportDetail({
           <Text style={[styles.detailDesc, { color: colors.foreground }]}>{report.description}</Text>
         </View>
 
+        {/* ═══ MEDIA ═══ */}
         {report.mediaUri ? (
           <View style={[styles.detailCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Text style={[styles.detailSection, { color: colors.primary }]}>Preuve jointe</Text>
-            <View style={[styles.mediaInfo, { backgroundColor: colors.secondary }]}>
-              <Feather name={report.mediaType === "video" ? "video" : "image"} size={20} color={colors.primary} />
-              <Text style={[styles.mediaInfoText, { color: colors.primary }]}>
-                {report.mediaType === "video" ? "Vidéo jointe au dossier" : "Photo jointe au dossier"}
-              </Text>
-            </View>
+            {report.mediaType === "photo" && mediaUrl && !imgError ? (
+              <Image
+                source={{ uri: mediaUrl }}
+                style={styles.mediaImage}
+                contentFit="contain"
+                onError={() => setImgError(true)}
+              />
+            ) : report.mediaType === "photo" && imgError ? (
+              <View style={[styles.mediaPlaceholder, { backgroundColor: colors.secondary }]}>
+                <Feather name="image" size={28} color={colors.mutedForeground} />
+                <Text style={[styles.mediaPlaceholderText, { color: colors.mutedForeground }]}>
+                  Photo non disponible
+                </Text>
+              </View>
+            ) : report.mediaType === "video" && mediaUrl ? (
+              <TouchableOpacity
+                style={[styles.videoBtn, { backgroundColor: "#0d2146", borderColor: "#1a3a6b" }]}
+                onPress={() => Linking.openURL(mediaUrl)}
+                activeOpacity={0.8}
+              >
+                <View style={styles.videoBtnIcon}>
+                  <Feather name="play-circle" size={30} color="#c9a227" />
+                </View>
+                <View>
+                  <Text style={styles.videoBtnTitle}>Lire la vidéo</Text>
+                  <Text style={styles.videoBtnSub}>Appuyer pour ouvrir dans le lecteur</Text>
+                </View>
+                <Feather name="external-link" size={16} color="rgba(255,255,255,0.5)" />
+              </TouchableOpacity>
+            ) : (
+              <View style={[styles.mediaPlaceholder, { backgroundColor: colors.secondary }]}>
+                <Feather name={report.mediaType === "video" ? "video" : "image"} size={24} color={colors.primary} />
+                <Text style={[styles.mediaPlaceholderText, { color: colors.primary }]}>
+                  {report.mediaType === "video" ? "Vidéo jointe (ancienne soumission)" : "Photo jointe (ancienne soumission)"}
+                </Text>
+              </View>
+            )}
           </View>
         ) : null}
 
         <View style={[styles.detailCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Text style={[styles.detailSection, { color: colors.primary }]}>Note administrative</Text>
           <TextInput
-            style={[
-              styles.noteInput,
-              { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.background },
-            ]}
+            style={[styles.noteInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.background }]}
             value={adminNote}
             onChangeText={setAdminNote}
-            placeholder="Ajouter une note visible par le signalant..."
+            placeholder="Ajouter une note interne..."
             placeholderTextColor={colors.mutedForeground}
             multiline
             numberOfLines={3}
             textAlignVertical="top"
           />
-          <Text style={[styles.noteHint, { color: colors.mutedForeground }]}>
-            Cette note sera visible par le signalant via son code de suivi.
-          </Text>
         </View>
 
         <View style={[styles.detailCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -324,10 +350,7 @@ function AdminReportDetail({
                   key={s}
                   style={[
                     styles.statusBtn,
-                    {
-                      backgroundColor: isSelected ? colors.primary : colors.card,
-                      borderColor: isSelected ? colors.primary : colors.border,
-                    },
+                    { backgroundColor: isSelected ? colors.primary : colors.card, borderColor: isSelected ? colors.primary : colors.border },
                   ]}
                   onPress={() => onUpdateStatus(s, adminNote.trim() || undefined)}
                 >
@@ -339,6 +362,16 @@ function AdminReportDetail({
             })}
           </View>
         </View>
+
+        {/* Bouton supprimer */}
+        <TouchableOpacity
+          style={styles.deleteBtn}
+          onPress={onDelete}
+          activeOpacity={0.8}
+        >
+          <Feather name="trash-2" size={16} color="#fff" />
+          <Text style={styles.deleteBtnText}>Supprimer ce signalement</Text>
+        </TouchableOpacity>
       </ScrollView>
     </View>
   );
@@ -370,26 +403,10 @@ function DetailRow({
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  header: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    gap: 12,
-  },
-  headerContent: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  headerTitle: {
-    fontSize: 22,
-    fontWeight: "800",
-    color: "#ffffff",
-  },
-  headerSubtitle: {
-    fontSize: 13,
-    color: "rgba(255,255,255,0.75)",
-    marginTop: 2,
-  },
+  header: { paddingHorizontal: 16, paddingBottom: 16, gap: 12 },
+  headerContent: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  headerTitle: { fontSize: 22, fontWeight: "800", color: "#ffffff" },
+  headerSubtitle: { fontSize: 13, color: "rgba(255,255,255,0.75)", marginTop: 2 },
   iconBtn: {
     width: 40,
     height: 40,
@@ -398,33 +415,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  statsRow: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  statCard: {
-    flex: 1,
-    borderRadius: 10,
-    padding: 10,
-    alignItems: "center",
-  },
-  statNum: {
-    fontSize: 22,
-    fontWeight: "800",
-    color: "#ffffff",
-  },
-  statLabel: {
-    fontSize: 10,
-    color: "rgba(255,255,255,0.8)",
-    marginTop: 2,
-    textAlign: "center",
-  },
-  filterRow: {
-    flexDirection: "row",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 6,
-  },
+  statsRow: { flexDirection: "row", gap: 8 },
+  statCard: { flex: 1, borderRadius: 10, padding: 10, alignItems: "center" },
+  statNum: { fontSize: 22, fontWeight: "800", color: "#ffffff" },
+  statLabel: { fontSize: 10, color: "rgba(255,255,255,0.8)", marginTop: 2, textAlign: "center" },
+  filterRow: { flexDirection: "row", paddingHorizontal: 16, paddingVertical: 12, gap: 6 },
   filterBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -434,33 +429,14 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
   },
-  filterText: {
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  badge: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  badgeText: {
-    fontSize: 10,
-    fontWeight: "700",
-  },
-  list: {
-    paddingHorizontal: 16,
-    paddingTop: 4,
-  },
-  empty: {
-    alignItems: "center",
-    paddingTop: 60,
-    gap: 12,
-  },
-  emptyText: {
-    fontSize: 15,
-  },
+  filterText: { fontSize: 12, fontWeight: "600" },
+  badge: { width: 18, height: 18, borderRadius: 9, alignItems: "center", justifyContent: "center" },
+  badgeText: { fontSize: 10, fontWeight: "700" },
+  list: { paddingHorizontal: 16, paddingTop: 4 },
+  empty: { alignItems: "center", paddingTop: 60, gap: 12 },
+  emptyText: { fontSize: 15 },
+
+  /* Detail */
   detailHeader: {
     flexDirection: "row",
     alignItems: "center",
@@ -476,33 +452,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  detailTitle: {
-    fontSize: 17,
-    fontWeight: "700",
-    color: "#ffffff",
-  },
-  detailContent: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    gap: 12,
-  },
-  detailCard: {
-    borderRadius: 14,
-    borderWidth: 1,
-    padding: 16,
-    gap: 12,
-  },
-  detailSection: {
-    fontSize: 13,
-    fontWeight: "700",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  detailRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 10,
-  },
+  detailTitle: { fontSize: 17, fontWeight: "700", color: "#ffffff" },
+  detailContent: { paddingHorizontal: 16, paddingTop: 16, gap: 12 },
+  detailCard: { borderRadius: 14, borderWidth: 1, padding: 16, gap: 12 },
+  detailSection: { fontSize: 13, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5 },
+  detailRow: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
   detailIconWrap: {
     width: 30,
     height: 30,
@@ -511,61 +465,40 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginTop: 2,
   },
-  detailLabel: {
-    fontSize: 11,
-    fontWeight: "500",
-    marginBottom: 1,
-  },
-  detailValue: {
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  detailDesc: {
-    fontSize: 14,
-    lineHeight: 22,
-  },
-  mediaInfo: {
+  detailLabel: { fontSize: 11, fontWeight: "500", marginBottom: 1 },
+  detailValue: { fontSize: 14, fontWeight: "600" },
+  detailDesc: { fontSize: 14, lineHeight: 22 },
+
+  /* Media */
+  mediaImage: { width: "100%", height: 240, borderRadius: 10 },
+  mediaPlaceholder: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    padding: 12,
+    padding: 14,
     borderRadius: 10,
   },
-  mediaInfoText: {
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  statusRow: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  statusBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    alignItems: "center",
-  },
-  statusBtnText: {
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  codeRow: {
+  mediaPlaceholderText: { fontSize: 13, fontWeight: "600", flex: 1 },
+  videoBtn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 12,
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
   },
-  codeBox: {
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+  videoBtnIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: "rgba(201,162,39,0.15)",
     alignItems: "center",
+    justifyContent: "center",
   },
-  codeText: {
-    fontSize: 18,
-    fontWeight: "800",
-    letterSpacing: 2,
-  },
+  videoBtnTitle: { fontSize: 14, fontWeight: "700", color: "#ffffff" },
+  videoBtnSub: { fontSize: 11, color: "rgba(255,255,255,0.5)", marginTop: 2 },
+
+  /* Note */
   noteInput: {
     borderWidth: 1,
     borderRadius: 10,
@@ -574,8 +507,32 @@ const styles = StyleSheet.create({
     minHeight: 80,
     lineHeight: 20,
   },
-  noteHint: {
-    fontSize: 11,
-    lineHeight: 15,
+
+  /* Status */
+  statusRow: { flexDirection: "row", gap: 8 },
+  statusBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    alignItems: "center",
   },
+  statusBtnText: { fontSize: 12, fontWeight: "700" },
+
+  /* Delete */
+  deleteBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "#dc2626",
+    paddingVertical: 14,
+    borderRadius: 14,
+    marginTop: 4,
+  },
+  deleteBtnText: { color: "#fff", fontSize: 14, fontWeight: "700" },
+
+  codeRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  codeBox: { borderRadius: 8, paddingHorizontal: 14, paddingVertical: 10, alignItems: "center" },
+  codeText: { fontSize: 18, fontWeight: "800", letterSpacing: 2 },
 });
