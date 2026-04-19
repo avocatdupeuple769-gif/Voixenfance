@@ -82,10 +82,11 @@ async function uploadMedia(id: string, mediaBase64: string, mediaMimeType: strin
 async function saveReportToCloud(report: Report): Promise<boolean> {
   try {
     const json = JSON.stringify(report);
-    const blob = new Blob([json], { type: "application/json" });
+    // Use TextEncoder for proper UTF-8 (supports accents/French chars)
+    const bytes = new TextEncoder().encode(json);
     const { error } = await supabase.storage
       .from(REPORTS_BUCKET)
-      .upload(`${report.id}.json`, blob, { contentType: "application/json", upsert: true });
+      .upload(`${report.id}.json`, bytes, { contentType: "application/json", upsert: true });
     if (error) {
       console.warn("Erreur sauvegarde signalement:", error.message);
       return false;
@@ -230,7 +231,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setReports(updated);
     saveLocalCache(updated);
 
-    saveReportToCloud(newReport);
+    // Await cloud save — if it fails, throw so the form can show an error
+    const saved = await saveReportToCloud(newReport);
+    if (!saved) {
+      throw new Error("Impossible d'envoyer le signalement. Vérifiez votre connexion Internet.");
+    }
 
     return trackingCode;
   };
