@@ -37,16 +37,6 @@ function RootLayoutNav() {
         }}
       />
       <Stack.Screen
-        name="track-report"
-        options={{
-          title: "Suivi de dossier",
-          headerBackTitle: "Retour",
-          headerStyle: { backgroundColor: "#1a3a6b" },
-          headerTintColor: "#ffffff",
-          headerTitleStyle: { fontWeight: "700" as const },
-        }}
-      />
-      <Stack.Screen
         name="resources"
         options={{
           title: "Ressources & Aide",
