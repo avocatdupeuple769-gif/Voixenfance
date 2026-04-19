@@ -21,26 +21,6 @@ import { useColors } from "@/hooks/useColors";
 
 type AbuseType = "sexual" | "violence" | "both";
 
-async function uriToBase64(uri: string): Promise<{ data: string; mimeType: string } | null> {
-  try {
-    const response = await fetch(uri);
-    const blob = await response.blob();
-    const mimeType = blob.type || "image/jpeg";
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const result = reader.result as string;
-        const base64 = result.split(",")[1];
-        resolve(base64 ? { data: base64, mimeType } : null);
-      };
-      reader.onerror = () => resolve(null);
-      reader.readAsDataURL(blob);
-    });
-  } catch {
-    return null;
-  }
-}
-
 export default function ReportScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -54,6 +34,7 @@ export default function ReportScreen() {
   const [description, setDescription] = useState("");
   const [location, setLocation] = useState("");
   const [mediaUri, setMediaUri] = useState<string | undefined>();
+  const [mediaMimeType, setMediaMimeType] = useState<string | undefined>();
   const [mediaType, setMediaType] = useState<"photo" | "video" | undefined>();
   const [submitting, setSubmitting] = useState(false);
 
@@ -74,6 +55,7 @@ export default function ReportScreen() {
           });
           if (!result.canceled && result.assets[0]) {
             setMediaUri(result.assets[0].uri);
+            setMediaMimeType(result.assets[0].mimeType || "image/jpeg");
             setMediaType("photo");
           }
         },
@@ -87,6 +69,7 @@ export default function ReportScreen() {
           });
           if (!result.canceled && result.assets[0]) {
             setMediaUri(result.assets[0].uri);
+            setMediaMimeType(result.assets[0].mimeType || "video/mp4");
             setMediaType("video");
           }
         },
@@ -117,19 +100,6 @@ export default function ReportScreen() {
     setSubmitting(true);
 
     try {
-      let mediaBase64: string | undefined;
-      let mediaMimeType: string | undefined;
-
-      if (mediaUri && mediaType === "photo") {
-        const encoded = await uriToBase64(mediaUri);
-        if (encoded) {
-          mediaBase64 = encoded.data;
-          mediaMimeType = encoded.mimeType;
-        }
-      } else if (mediaUri && mediaType === "video") {
-        mediaMimeType = "video/mp4";
-      }
-
       const code = await addReport(
         {
           reporterName: reporterName.trim(),
@@ -138,11 +108,10 @@ export default function ReportScreen() {
           abuseType,
           description: description.trim(),
           location: location.trim(),
-          mediaUri,
-          mediaType,
         },
-        mediaBase64,
-        mediaMimeType
+        mediaUri,
+        mediaMimeType,
+        mediaType
       );
       setSubmitting(false);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -295,7 +264,7 @@ export default function ReportScreen() {
               )}
               <TouchableOpacity
                 style={[styles.removeMedia, { backgroundColor: "#ef4444" }]}
-                onPress={() => { setMediaUri(undefined); setMediaType(undefined); }}
+                onPress={() => { setMediaUri(undefined); setMediaMimeType(undefined); setMediaType(undefined); }}
               >
                 <Feather name="x" size={16} color="#fff" />
               </TouchableOpacity>
@@ -418,5 +387,5 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     marginTop: 8,
   },
-  submitText: { color: "#ffffff", fontSize: 16, fontWeight: "700" },
+  submitText: { color: "#fff", fontSize: 16, fontWeight: "700" },
 });
