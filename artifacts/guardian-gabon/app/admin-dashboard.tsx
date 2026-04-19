@@ -257,16 +257,6 @@ function AdminReportDetail({
         contentContainerStyle={[styles.detailContent, { paddingBottom: (isWeb ? 34 : insets.bottom) + 20 }]}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={[styles.detailCard, { backgroundColor: "#f0fdf4", borderColor: "#bbf7d0" }]}>
-          <View style={styles.codeRow}>
-            <Feather name="hash" size={15} color="#15803d" />
-            <Text style={[styles.detailSection, { color: "#15803d", marginBottom: 0 }]}>Code de suivi</Text>
-          </View>
-          <View style={[styles.codeBox, { backgroundColor: "#dcfce7" }]}>
-            <Text style={[styles.codeText, { color: "#166534" }]}>{report.trackingCode || "N/A"}</Text>
-          </View>
-        </View>
-
         <View style={[styles.detailCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Text style={[styles.detailSection, { color: colors.primary }]}>Informations confidentielles</Text>
           <DetailRow icon="user" label="Signalé par" value={`${report.reporterName}, ${report.reporterAge} ans`} colors={colors} />
