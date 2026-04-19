@@ -146,7 +146,7 @@ export default function ReportScreen() {
       );
       setSubmitting(false);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      router.replace({ pathname: "/report-success", params: { code } });
+      router.replace("/report-success");
     } catch {
       setSubmitting(false);
     }
