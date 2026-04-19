@@ -64,8 +64,9 @@ jobs:
       - name: Write .env files for Metro bundler
         working-directory: artifacts/guardian-gabon
         run: |
-          echo "EXPO_PUBLIC_API_URL=https://8f21e1a5-ad38-45c5-a6a0-72627d76e9b8-00-wcwvkfi8xl4x.picard.replit.dev/api" > .env
-          echo "EXPO_PUBLIC_API_URL=https://8f21e1a5-ad38-45c5-a6a0-72627d76e9b8-00-wcwvkfi8xl4x.picard.replit.dev/api" > .env.production
+          echo "EXPO_PUBLIC_SUPABASE_URL=https://ilzrzwuhfraywjdlbtqf.supabase.co" > .env
+          echo "EXPO_PUBLIC_SUPABASE_KEY=sb_publishable_Ciy2zPaTFQU5_MZ5Tt3b2Q_2uFhB6ST" >> .env
+          cp .env .env.production
           cat .env
 
       - name: Expo Prebuild
@@ -74,7 +75,8 @@ jobs:
         env:
           EXPO_NO_TELEMETRY: 1
           CI: 1
-          EXPO_PUBLIC_API_URL: https://8f21e1a5-ad38-45c5-a6a0-72627d76e9b8-00-wcwvkfi8xl4x.picard.replit.dev/api
+          EXPO_PUBLIC_SUPABASE_URL: https://ilzrzwuhfraywjdlbtqf.supabase.co
+          EXPO_PUBLIC_SUPABASE_KEY: sb_publishable_Ciy2zPaTFQU5_MZ5Tt3b2Q_2uFhB6ST
 
       - name: Make Gradle executable
         working-directory: artifacts/guardian-gabon/android
@@ -94,7 +96,8 @@ jobs:
         run: ./gradlew assembleRelease --no-daemon
         env:
           GRADLE_OPTS: -Xmx4g -XX:MaxMetaspaceSize=512m
-          EXPO_PUBLIC_API_URL: https://8f21e1a5-ad38-45c5-a6a0-72627d76e9b8-00-wcwvkfi8xl4x.picard.replit.dev/api
+          EXPO_PUBLIC_SUPABASE_URL: https://ilzrzwuhfraywjdlbtqf.supabase.co
+          EXPO_PUBLIC_SUPABASE_KEY: sb_publishable_Ciy2zPaTFQU5_MZ5Tt3b2Q_2uFhB6ST
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
