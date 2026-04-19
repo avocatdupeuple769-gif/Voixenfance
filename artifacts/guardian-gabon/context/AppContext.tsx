@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as FileSystem from "expo-file-system";
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 import {
   MEDIA_BUCKET,
@@ -26,9 +27,10 @@ export interface Report {
 interface AppContextType {
   reports: Report[];
   addReport: (
-    report: Omit<Report, "id" | "submittedAt" | "status" | "trackingCode">,
-    mediaBase64?: string,
-    mediaMimeType?: string
+    report: Omit<Report, "id" | "submittedAt" | "status" | "trackingCode" | "mediaUri" | "mediaType">,
+    localMediaUri?: string,
+    mediaMimeType?: string,
+    mediaType?: "photo" | "video"
   ) => Promise<string>;
   updateReportStatus: (id: string, status: Report["status"], adminNote?: string) => Promise<void>;
   deleteReport: (id: string) => Promise<void>;
@@ -44,10 +46,10 @@ const AppContext = createContext<AppContextType | null>(null);
 
 const ADMIN_PASSWORD = "VoixEnfance2024!";
 const TAP_UNLOCK_TOKEN = "__tap_unlock__";
-const LOCAL_CACHE_KEY = "@voixenfance_reports_v3";
-const SEEN_IDS_KEY = "@voixenfance_seen_ids_v3";
+const LOCAL_CACHE_KEY = "@voixenfance_reports_v4";
+const SEEN_IDS_KEY = "@voixenfance_seen_ids_v4";
 
-// ─── Supabase direct fetch helpers (bypass SDK, more reliable on Android) ───
+// ─── Supabase direct fetch helpers ───────────────────────────────────────────
 
 function authHeaders() {
   return {
@@ -56,39 +58,27 @@ function authHeaders() {
   };
 }
 
-/** Upload a JSON report file to Supabase Storage */
+/** Upload report JSON using direct fetch (POST with text body) */
 async function cloudUploadReport(report: Report): Promise<boolean> {
   try {
     const json = JSON.stringify(report);
-    const res = await fetch(
-      `${SUPABASE_URL}/storage/v1/object/${REPORTS_BUCKET}/${report.id}.json`,
-      {
-        method: "POST",
-        headers: {
-          ...authHeaders(),
-          "Content-Type": "application/json",
-          "x-upsert": "true",
-        },
-        body: json,
-      }
-    );
+    const url = `${SUPABASE_URL}/storage/v1/object/${REPORTS_BUCKET}/${report.id}.json`;
+
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json", "x-upsert": "true" },
+      body: json,
+    });
+
     if (!res.ok) {
-      // Try PUT if POST failed (upsert fallback)
-      const res2 = await fetch(
-        `${SUPABASE_URL}/storage/v1/object/${REPORTS_BUCKET}/${report.id}.json`,
-        {
-          method: "PUT",
-          headers: {
-            ...authHeaders(),
-            "Content-Type": "application/json",
-            "x-upsert": "true",
-          },
-          body: json,
-        }
-      );
+      // Retry with PUT
+      const res2 = await fetch(url, {
+        method: "PUT",
+        headers: { ...authHeaders(), "Content-Type": "application/json", "x-upsert": "true" },
+        body: json,
+      });
       if (!res2.ok) {
-        const txt = await res2.text();
-        console.warn("cloudUploadReport PUT failed:", res2.status, txt);
+        console.warn("cloudUploadReport failed:", res2.status, await res2.text());
         return false;
       }
     }
@@ -99,7 +89,67 @@ async function cloudUploadReport(report: Report): Promise<boolean> {
   }
 }
 
-/** List all report file names in the bucket */
+/**
+ * Upload media file using expo-file-system uploadAsync.
+ * This is the ONLY reliable way to upload files from React Native.
+ * FileReader does not exist in Hermes/React Native.
+ */
+async function cloudUploadMedia(
+  id: string,
+  localUri: string,
+  mimeType: string
+): Promise<string | null> {
+  try {
+    const ext = mimeType.split("/")[1]?.split(";")[0] || "jpg";
+    const safeExt = ["jpg", "jpeg", "png", "mp4", "mov", "webm", "gif", "heic", "heif"].includes(ext.toLowerCase())
+      ? ext.toLowerCase()
+      : mimeType.startsWith("video") ? "mp4" : "jpg";
+    const filename = `${id}.${safeExt}`;
+    const uploadUrl = `${SUPABASE_URL}/storage/v1/object/${MEDIA_BUCKET}/${filename}`;
+
+    console.log(`[media] Uploading ${filename} (${mimeType}) via FileSystem.uploadAsync...`);
+
+    const result = await FileSystem.uploadAsync(uploadUrl, localUri, {
+      uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+      httpMethod: "POST",
+      headers: {
+        ...authHeaders(),
+        "Content-Type": mimeType,
+        "x-upsert": "true",
+      },
+    });
+
+    console.log(`[media] Upload result: status=${result.status}, body=${result.body?.substring(0, 100)}`);
+
+    if (result.status >= 200 && result.status < 300) {
+      return `${SUPABASE_URL}/storage/v1/object/public/${MEDIA_BUCKET}/${filename}`;
+    }
+
+    // Retry with PUT
+    const result2 = await FileSystem.uploadAsync(uploadUrl, localUri, {
+      uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+      httpMethod: "PUT",
+      headers: {
+        ...authHeaders(),
+        "Content-Type": mimeType,
+        "x-upsert": "true",
+      },
+    });
+    console.log(`[media] PUT result: status=${result2.status}`);
+
+    if (result2.status >= 200 && result2.status < 300) {
+      return `${SUPABASE_URL}/storage/v1/object/public/${MEDIA_BUCKET}/${filename}`;
+    }
+
+    console.warn("[media] Upload failed after retry:", result2.status, result2.body?.substring(0, 200));
+    return null;
+  } catch (e) {
+    console.warn("[media] cloudUploadMedia error:", e);
+    return null;
+  }
+}
+
+/** List all report filenames from cloud */
 async function cloudListReports(): Promise<string[]> {
   try {
     const res = await fetch(
@@ -115,17 +165,18 @@ async function cloudListReports(): Promise<string[]> {
       return [];
     }
     const files: { name: string }[] = await res.json();
-    return files.filter((f) => f.name.endsWith(".json")).map((f) => f.name);
+    const names = files.filter((f) => f.name.endsWith(".json")).map((f) => f.name);
+    console.log(`[list] Found ${names.length} reports in cloud`);
+    return names;
   } catch (e) {
     console.warn("cloudListReports error:", e);
     return [];
   }
 }
 
-/** Download a single report via public URL (no auth needed for public buckets) */
+/** Download a single report via public URL (no auth needed) */
 async function cloudDownloadReport(filename: string): Promise<Report | null> {
   try {
-    // Use public URL — works without authentication on public buckets
     const url = `${SUPABASE_URL}/storage/v1/object/public/${REPORTS_BUCKET}/${filename}`;
     const res = await fetch(url);
     if (!res.ok) {
@@ -150,45 +201,6 @@ async function cloudDeleteReport(id: string): Promise<void> {
     });
   } catch (e) {
     console.warn("cloudDeleteReport error:", e);
-  }
-}
-
-/** Upload media (base64) to Supabase Storage */
-async function cloudUploadMedia(
-  id: string,
-  mediaBase64: string,
-  mediaMimeType: string
-): Promise<string | null> {
-  try {
-    const ext = mediaMimeType.split("/")[1]?.split(";")[0] || "jpg";
-    const safeExt = ["jpg", "jpeg", "png", "mp4", "mov", "webm", "gif"].includes(ext) ? ext : "bin";
-    const filename = `${id}.${safeExt}`;
-
-    // Convert base64 → binary
-    const binaryStr = atob(mediaBase64);
-    const bytes = new Uint8Array(binaryStr.length);
-    for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
-
-    const res = await fetch(
-      `${SUPABASE_URL}/storage/v1/object/${MEDIA_BUCKET}/${filename}`,
-      {
-        method: "POST",
-        headers: {
-          ...authHeaders(),
-          "Content-Type": mediaMimeType,
-          "x-upsert": "true",
-        },
-        body: bytes,
-      }
-    );
-    if (!res.ok) {
-      console.warn("cloudUploadMedia failed:", res.status, await res.text());
-      return null;
-    }
-    return `${SUPABASE_URL}/storage/v1/object/public/${MEDIA_BUCKET}/${filename}`;
-  } catch (e) {
-    console.warn("cloudUploadMedia error:", e);
-    return null;
   }
 }
 
@@ -244,12 +256,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const refreshReports = useCallback(async (): Promise<{ newCount: number }> => {
     try {
-      // Step 1: get list of files
       const filenames = await cloudListReports();
-      console.log(`[refresh] Fichiers trouvés dans Supabase: ${filenames.length}`);
       if (filenames.length === 0) return { newCount: 0 };
 
-      // Step 2: download each file in parallel (via public URL)
       const settled = await Promise.allSettled(
         filenames.map((name) => cloudDownloadReport(name))
       );
@@ -258,7 +267,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       for (const r of settled) {
         if (r.status === "fulfilled" && r.value) cloudReports.push(r.value);
       }
-      console.log(`[refresh] Signalements valides: ${cloudReports.length}/${filenames.length}`);
+      console.log(`[refresh] ${cloudReports.length}/${filenames.length} reports loaded`);
 
       if (cloudReports.length === 0) return { newCount: 0 };
 
@@ -266,7 +275,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         (a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime()
       );
 
-      // Count new
       const seenRaw = await AsyncStorage.getItem(SEEN_IDS_KEY);
       const seenIds: string[] = seenRaw ? JSON.parse(seenRaw) : [];
       const newOnes = cloudReports.filter((r) => !seenIds.includes(r.id));
@@ -276,7 +284,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       saveLocalCache(cloudReports);
       return { newCount: newOnes.length };
     } catch (e) {
-      console.warn("[refresh] Erreur:", e);
+      console.warn("[refresh] Error:", e);
       return { newCount: 0 };
     }
   }, []);
@@ -286,22 +294,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [isAdmin, refreshReports]);
 
   const addReport = async (
-    reportData: Omit<Report, "id" | "submittedAt" | "status" | "trackingCode">,
-    mediaBase64?: string,
-    mediaMimeType?: string
+    reportData: Omit<Report, "id" | "submittedAt" | "status" | "trackingCode" | "mediaUri" | "mediaType">,
+    localMediaUri?: string,
+    mediaMimeType?: string,
+    mediaType?: "photo" | "video"
   ): Promise<string> => {
     const trackingCode = generateTrackingCode();
     const id = `${Date.now()}${Math.random().toString(36).substr(2, 9)}`;
     const submittedAt = new Date().toISOString();
 
-    let mediaUri: string | undefined;
-    let mediaType: "photo" | "video" | undefined;
+    // Upload media first if provided
+    let cloudMediaUri: string | undefined;
+    let finalMediaType: "photo" | "video" | undefined = mediaType;
 
-    if (mediaBase64 && mediaMimeType) {
-      const url = await cloudUploadMedia(id, mediaBase64, mediaMimeType);
+    if (localMediaUri && mediaMimeType) {
+      console.log("[addReport] Uploading media...", localMediaUri, mediaMimeType);
+      const url = await cloudUploadMedia(id, localMediaUri, mediaMimeType);
       if (url) {
-        mediaUri = url;
-        mediaType = mediaMimeType.startsWith("video") ? "video" : "photo";
+        cloudMediaUri = url;
+        console.log("[addReport] Media uploaded:", cloudMediaUri);
+      } else {
+        console.warn("[addReport] Media upload failed — continuing without media");
+        // Don't block the report submission for media failure
       }
     }
 
@@ -311,11 +325,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       trackingCode,
       submittedAt,
       status: "pending",
-      mediaUri,
-      mediaType,
+      mediaUri: cloudMediaUri,
+      mediaType: cloudMediaUri ? finalMediaType : undefined,
     };
 
-    // Save to cloud first — throw if it fails so the user sees the error
+    // Upload report JSON — throw if it fails
     const saved = await cloudUploadReport(newReport);
     if (!saved) {
       throw new Error(
@@ -323,7 +337,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       );
     }
 
-    // Update local state after successful cloud save
+    // Update local state
     const updated = [newReport, ...reports];
     setReports(updated);
     saveLocalCache(updated);
@@ -341,7 +355,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     );
     setReports(updated);
     saveLocalCache(updated);
-
     const report = updated.find((r) => r.id === id);
     if (report) await cloudUploadReport(report);
   };
@@ -351,7 +364,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const updated = reports.filter((r) => r.id !== id);
     setReports(updated);
     saveLocalCache(updated);
-
     await cloudDeleteReport(id);
     if (report?.mediaUri) await cloudDeleteMedia(report.mediaUri);
   };
