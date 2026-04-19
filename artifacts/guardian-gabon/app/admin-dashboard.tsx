@@ -31,7 +31,23 @@ export default function AdminDashboardScreen() {
 
   useEffect(() => {
     handleRefresh();
+
+    const interval = setInterval(() => {
+      handleRefreshSilent();
+    }, 30000);
+
+    return () => clearInterval(interval);
   }, []);
+
+  const handleRefreshSilent = async () => {
+    const { newCount } = await refreshReports();
+    if (newCount > 0) {
+      for (let i = 0; i < newCount; i++) {
+        await new Promise((r) => setTimeout(r, i * 400));
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      }
+    }
+  };
 
   const handleRefresh = async () => {
     setRefreshing(true);
