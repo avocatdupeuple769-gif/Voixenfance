@@ -1,6 +1,11 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { MEDIA_BUCKET, REPORTS_BUCKET, SUPABASE_PUBLIC_URL, supabase } from "@/lib/supabase";
+import {
+  MEDIA_BUCKET,
+  REPORTS_BUCKET,
+  SUPABASE_SERVICE_KEY,
+  SUPABASE_URL,
+} from "@/lib/supabase";
 
 export interface Report {
   id: string;
@@ -39,8 +44,170 @@ const AppContext = createContext<AppContextType | null>(null);
 
 const ADMIN_PASSWORD = "VoixEnfance2024!";
 const TAP_UNLOCK_TOKEN = "__tap_unlock__";
-const LOCAL_CACHE_KEY = "@voixenfance_reports_v2";
-const SEEN_IDS_KEY = "@voixenfance_seen_ids";
+const LOCAL_CACHE_KEY = "@voixenfance_reports_v3";
+const SEEN_IDS_KEY = "@voixenfance_seen_ids_v3";
+
+// ─── Supabase direct fetch helpers (bypass SDK, more reliable on Android) ───
+
+function authHeaders() {
+  return {
+    Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+    apikey: SUPABASE_SERVICE_KEY,
+  };
+}
+
+/** Upload a JSON report file to Supabase Storage */
+async function cloudUploadReport(report: Report): Promise<boolean> {
+  try {
+    const json = JSON.stringify(report);
+    const res = await fetch(
+      `${SUPABASE_URL}/storage/v1/object/${REPORTS_BUCKET}/${report.id}.json`,
+      {
+        method: "POST",
+        headers: {
+          ...authHeaders(),
+          "Content-Type": "application/json",
+          "x-upsert": "true",
+        },
+        body: json,
+      }
+    );
+    if (!res.ok) {
+      // Try PUT if POST failed (upsert fallback)
+      const res2 = await fetch(
+        `${SUPABASE_URL}/storage/v1/object/${REPORTS_BUCKET}/${report.id}.json`,
+        {
+          method: "PUT",
+          headers: {
+            ...authHeaders(),
+            "Content-Type": "application/json",
+            "x-upsert": "true",
+          },
+          body: json,
+        }
+      );
+      if (!res2.ok) {
+        const txt = await res2.text();
+        console.warn("cloudUploadReport PUT failed:", res2.status, txt);
+        return false;
+      }
+    }
+    return true;
+  } catch (e) {
+    console.warn("cloudUploadReport error:", e);
+    return false;
+  }
+}
+
+/** List all report file names in the bucket */
+async function cloudListReports(): Promise<string[]> {
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/storage/v1/object/list/${REPORTS_BUCKET}`,
+      {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ prefix: "", limit: 1000 }),
+      }
+    );
+    if (!res.ok) {
+      console.warn("cloudListReports failed:", res.status, await res.text());
+      return [];
+    }
+    const files: { name: string }[] = await res.json();
+    return files.filter((f) => f.name.endsWith(".json")).map((f) => f.name);
+  } catch (e) {
+    console.warn("cloudListReports error:", e);
+    return [];
+  }
+}
+
+/** Download a single report via public URL (no auth needed for public buckets) */
+async function cloudDownloadReport(filename: string): Promise<Report | null> {
+  try {
+    // Use public URL — works without authentication on public buckets
+    const url = `${SUPABASE_URL}/storage/v1/object/public/${REPORTS_BUCKET}/${filename}`;
+    const res = await fetch(url);
+    if (!res.ok) {
+      console.warn("cloudDownloadReport failed:", res.status, filename);
+      return null;
+    }
+    const text = await res.text();
+    return JSON.parse(text) as Report;
+  } catch (e) {
+    console.warn("cloudDownloadReport error:", filename, e);
+    return null;
+  }
+}
+
+/** Delete report file from cloud */
+async function cloudDeleteReport(id: string): Promise<void> {
+  try {
+    await fetch(`${SUPABASE_URL}/storage/v1/object/${REPORTS_BUCKET}`, {
+      method: "DELETE",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ prefixes: [`${id}.json`] }),
+    });
+  } catch (e) {
+    console.warn("cloudDeleteReport error:", e);
+  }
+}
+
+/** Upload media (base64) to Supabase Storage */
+async function cloudUploadMedia(
+  id: string,
+  mediaBase64: string,
+  mediaMimeType: string
+): Promise<string | null> {
+  try {
+    const ext = mediaMimeType.split("/")[1]?.split(";")[0] || "jpg";
+    const safeExt = ["jpg", "jpeg", "png", "mp4", "mov", "webm", "gif"].includes(ext) ? ext : "bin";
+    const filename = `${id}.${safeExt}`;
+
+    // Convert base64 → binary
+    const binaryStr = atob(mediaBase64);
+    const bytes = new Uint8Array(binaryStr.length);
+    for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+
+    const res = await fetch(
+      `${SUPABASE_URL}/storage/v1/object/${MEDIA_BUCKET}/${filename}`,
+      {
+        method: "POST",
+        headers: {
+          ...authHeaders(),
+          "Content-Type": mediaMimeType,
+          "x-upsert": "true",
+        },
+        body: bytes,
+      }
+    );
+    if (!res.ok) {
+      console.warn("cloudUploadMedia failed:", res.status, await res.text());
+      return null;
+    }
+    return `${SUPABASE_URL}/storage/v1/object/public/${MEDIA_BUCKET}/${filename}`;
+  } catch (e) {
+    console.warn("cloudUploadMedia error:", e);
+    return null;
+  }
+}
+
+/** Delete media from cloud */
+async function cloudDeleteMedia(mediaUri: string): Promise<void> {
+  try {
+    if (!mediaUri.includes(SUPABASE_URL)) return;
+    const parts = mediaUri.split(`/${MEDIA_BUCKET}/`);
+    if (parts.length < 2) return;
+    const filename = parts[1].split("?")[0];
+    await fetch(`${SUPABASE_URL}/storage/v1/object/${MEDIA_BUCKET}`, {
+      method: "DELETE",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ prefixes: [filename] }),
+    });
+  } catch {}
+}
+
+// ─── Utilities ───────────────────────────────────────────────────────────────
 
 function generateTrackingCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -52,105 +219,7 @@ function generateTrackingCode(): string {
   return code;
 }
 
-async function uploadMedia(id: string, mediaBase64: string, mediaMimeType: string): Promise<string | null> {
-  try {
-    const ext = mediaMimeType.split("/")[1]?.split(";")[0] || "jpg";
-    const safeExt = ["jpg", "jpeg", "png", "mp4", "mov", "webm", "gif"].includes(ext) ? ext : "bin";
-    const filename = `${id}.${safeExt}`;
-
-    const dataUri = `data:${mediaMimeType};base64,${mediaBase64}`;
-    const fetchRes = await fetch(dataUri);
-    const blob = await fetchRes.blob();
-
-    const { error } = await supabase.storage
-      .from(MEDIA_BUCKET)
-      .upload(filename, blob, { contentType: mediaMimeType, upsert: true });
-
-    if (error) {
-      console.warn("Erreur upload média:", error.message);
-      return null;
-    }
-
-    const { data } = supabase.storage.from(MEDIA_BUCKET).getPublicUrl(filename);
-    return data.publicUrl;
-  } catch (e) {
-    console.warn("Upload média échoué:", e);
-    return null;
-  }
-}
-
-async function saveReportToCloud(report: Report): Promise<boolean> {
-  try {
-    const json = JSON.stringify(report);
-    // Use TextEncoder for proper UTF-8 (supports accents/French chars)
-    const bytes = new TextEncoder().encode(json);
-    const { error } = await supabase.storage
-      .from(REPORTS_BUCKET)
-      .upload(`${report.id}.json`, bytes, { contentType: "application/json", upsert: true });
-    if (error) {
-      console.warn("Erreur sauvegarde signalement:", error.message);
-      return false;
-    }
-    return true;
-  } catch (e) {
-    console.warn("saveReportToCloud error:", e);
-    return false;
-  }
-}
-
-async function fetchAllReportsFromCloud(): Promise<Report[]> {
-  try {
-    const { data: files, error } = await supabase.storage
-      .from(REPORTS_BUCKET)
-      .list("", { limit: 1000, sortBy: { column: "created_at", order: "desc" } });
-
-    if (error || !files) return [];
-
-    const jsonFiles = files.filter((f) => f.name.endsWith(".json"));
-
-    const results = await Promise.allSettled(
-      jsonFiles.map(async (file) => {
-        const { data, error: dlErr } = await supabase.storage
-          .from(REPORTS_BUCKET)
-          .download(file.name);
-        if (dlErr || !data) return null;
-        const text = await data.text();
-        return JSON.parse(text) as Report;
-      })
-    );
-
-    const reports: Report[] = [];
-    for (const r of results) {
-      if (r.status === "fulfilled" && r.value) reports.push(r.value);
-    }
-
-    return reports.sort(
-      (a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime()
-    );
-  } catch (e) {
-    console.warn("fetchAllReportsFromCloud error:", e);
-    return [];
-  }
-}
-
-async function deleteReportFromCloud(id: string): Promise<void> {
-  try {
-    await supabase.storage.from(REPORTS_BUCKET).remove([`${id}.json`]);
-  } catch (e) {
-    console.warn("deleteReportFromCloud error:", e);
-  }
-}
-
-async function deleteMediaFromCloud(mediaUri: string): Promise<void> {
-  try {
-    if (!mediaUri.includes(SUPABASE_PUBLIC_URL)) return;
-    const parts = mediaUri.split(`/${MEDIA_BUCKET}/`);
-    if (parts.length > 1) {
-      const filename = parts[1].split("?")[0];
-      await supabase.storage.from(MEDIA_BUCKET).remove([filename]);
-    }
-  } catch {}
-}
+// ─── Provider ────────────────────────────────────────────────────────────────
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [reports, setReports] = useState<Report[]>([]);
@@ -175,20 +244,39 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const refreshReports = useCallback(async (): Promise<{ newCount: number }> => {
     try {
-      const cloudReports = await fetchAllReportsFromCloud();
+      // Step 1: get list of files
+      const filenames = await cloudListReports();
+      console.log(`[refresh] Fichiers trouvés dans Supabase: ${filenames.length}`);
+      if (filenames.length === 0) return { newCount: 0 };
+
+      // Step 2: download each file in parallel (via public URL)
+      const settled = await Promise.allSettled(
+        filenames.map((name) => cloudDownloadReport(name))
+      );
+
+      const cloudReports: Report[] = [];
+      for (const r of settled) {
+        if (r.status === "fulfilled" && r.value) cloudReports.push(r.value);
+      }
+      console.log(`[refresh] Signalements valides: ${cloudReports.length}/${filenames.length}`);
+
       if (cloudReports.length === 0) return { newCount: 0 };
 
+      cloudReports.sort(
+        (a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime()
+      );
+
+      // Count new
       const seenRaw = await AsyncStorage.getItem(SEEN_IDS_KEY);
       const seenIds: string[] = seenRaw ? JSON.parse(seenRaw) : [];
       const newOnes = cloudReports.filter((r) => !seenIds.includes(r.id));
-      const allIds = cloudReports.map((r) => r.id);
-      await AsyncStorage.setItem(SEEN_IDS_KEY, JSON.stringify(allIds));
+      await AsyncStorage.setItem(SEEN_IDS_KEY, JSON.stringify(cloudReports.map((r) => r.id)));
 
       setReports(cloudReports);
       saveLocalCache(cloudReports);
       return { newCount: newOnes.length };
     } catch (e) {
-      console.warn("refreshReports error:", e);
+      console.warn("[refresh] Erreur:", e);
       return { newCount: 0 };
     }
   }, []);
@@ -203,14 +291,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     mediaMimeType?: string
   ): Promise<string> => {
     const trackingCode = generateTrackingCode();
-    const id = Date.now().toString() + Math.random().toString(36).substr(2, 9);
+    const id = `${Date.now()}${Math.random().toString(36).substr(2, 9)}`;
     const submittedAt = new Date().toISOString();
 
     let mediaUri: string | undefined;
     let mediaType: "photo" | "video" | undefined;
 
     if (mediaBase64 && mediaMimeType) {
-      const url = await uploadMedia(id, mediaBase64, mediaMimeType);
+      const url = await cloudUploadMedia(id, mediaBase64, mediaMimeType);
       if (url) {
         mediaUri = url;
         mediaType = mediaMimeType.startsWith("video") ? "video" : "photo";
@@ -227,15 +315,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       mediaType,
     };
 
+    // Save to cloud first — throw if it fails so the user sees the error
+    const saved = await cloudUploadReport(newReport);
+    if (!saved) {
+      throw new Error(
+        "Impossible d'envoyer le signalement. Vérifiez votre connexion Internet et réessayez."
+      );
+    }
+
+    // Update local state after successful cloud save
     const updated = [newReport, ...reports];
     setReports(updated);
     saveLocalCache(updated);
-
-    // Await cloud save — if it fails, throw so the form can show an error
-    const saved = await saveReportToCloud(newReport);
-    if (!saved) {
-      throw new Error("Impossible d'envoyer le signalement. Vérifiez votre connexion Internet.");
-    }
 
     return trackingCode;
   };
@@ -252,9 +343,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     saveLocalCache(updated);
 
     const report = updated.find((r) => r.id === id);
-    if (report) {
-      await saveReportToCloud(report);
-    }
+    if (report) await cloudUploadReport(report);
   };
 
   const deleteReport = async (id: string) => {
@@ -263,18 +352,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setReports(updated);
     saveLocalCache(updated);
 
-    await deleteReportFromCloud(id);
-    if (report?.mediaUri) {
-      await deleteMediaFromCloud(report.mediaUri);
-    }
+    await cloudDeleteReport(id);
+    if (report?.mediaUri) await cloudDeleteMedia(report.mediaUri);
   };
 
   const getReportByCode = (code: string): Report | undefined =>
     reports.find((r) => r.trackingCode.toLowerCase() === code.toLowerCase());
 
-  const fetchReportByCode = async (code: string): Promise<Report | null> => {
-    return reports.find((r) => r.trackingCode.toLowerCase() === code.toLowerCase()) ?? null;
-  };
+  const fetchReportByCode = async (code: string): Promise<Report | null> =>
+    reports.find((r) => r.trackingCode.toLowerCase() === code.toLowerCase()) ?? null;
 
   const adminLogin = (password: string): boolean => {
     if (password === ADMIN_PASSWORD || password === TAP_UNLOCK_TOKEN) {
