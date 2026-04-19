@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { MEDIA_BUCKET, SUPABASE_PUBLIC_URL, supabase } from "@/lib/supabase";
+import { MEDIA_BUCKET, REPORTS_BUCKET, SUPABASE_PUBLIC_URL, supabase } from "@/lib/supabase";
 
 export interface Report {
   id: string;
@@ -39,7 +39,7 @@ const AppContext = createContext<AppContextType | null>(null);
 
 const ADMIN_PASSWORD = "VoixEnfance2024!";
 const TAP_UNLOCK_TOKEN = "__tap_unlock__";
-const STORAGE_KEY = "@voixenfance_reports";
+const LOCAL_CACHE_KEY = "@voixenfance_reports_v2";
 const SEEN_IDS_KEY = "@voixenfance_seen_ids";
 
 function generateTrackingCode(): string {
@@ -52,29 +52,7 @@ function generateTrackingCode(): string {
   return code;
 }
 
-function mapRow(r: any): Report {
-  return {
-    id: r.id,
-    trackingCode: r.tracking_code || "",
-    reporterName: r.reporter_name || "",
-    reporterAge: r.reporter_age || "",
-    victimAge: r.victim_age || "",
-    abuseType: (r.abuse_type || "sexual") as Report["abuseType"],
-    description: r.description || "",
-    location: r.location || "",
-    mediaUri: r.media_url || undefined,
-    mediaType: (r.media_type || undefined) as Report["mediaType"],
-    submittedAt: r.submitted_at || new Date().toISOString(),
-    status: (r.status || "pending") as Report["status"],
-    adminNote: r.admin_note || undefined,
-  };
-}
-
-async function uploadMedia(
-  id: string,
-  mediaBase64: string,
-  mediaMimeType: string
-): Promise<string | null> {
+async function uploadMedia(id: string, mediaBase64: string, mediaMimeType: string): Promise<string | null> {
   try {
     const ext = mediaMimeType.split("/")[1]?.split(";")[0] || "jpg";
     const safeExt = ["jpg", "jpeg", "png", "mp4", "mov", "webm", "gif"].includes(ext) ? ext : "bin";
@@ -101,49 +79,112 @@ async function uploadMedia(
   }
 }
 
+async function saveReportToCloud(report: Report): Promise<boolean> {
+  try {
+    const json = JSON.stringify(report);
+    const blob = new Blob([json], { type: "application/json" });
+    const { error } = await supabase.storage
+      .from(REPORTS_BUCKET)
+      .upload(`${report.id}.json`, blob, { contentType: "application/json", upsert: true });
+    if (error) {
+      console.warn("Erreur sauvegarde signalement:", error.message);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.warn("saveReportToCloud error:", e);
+    return false;
+  }
+}
+
+async function fetchAllReportsFromCloud(): Promise<Report[]> {
+  try {
+    const { data: files, error } = await supabase.storage
+      .from(REPORTS_BUCKET)
+      .list("", { limit: 1000, sortBy: { column: "created_at", order: "desc" } });
+
+    if (error || !files) return [];
+
+    const jsonFiles = files.filter((f) => f.name.endsWith(".json"));
+
+    const results = await Promise.allSettled(
+      jsonFiles.map(async (file) => {
+        const { data, error: dlErr } = await supabase.storage
+          .from(REPORTS_BUCKET)
+          .download(file.name);
+        if (dlErr || !data) return null;
+        const text = await data.text();
+        return JSON.parse(text) as Report;
+      })
+    );
+
+    const reports: Report[] = [];
+    for (const r of results) {
+      if (r.status === "fulfilled" && r.value) reports.push(r.value);
+    }
+
+    return reports.sort(
+      (a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime()
+    );
+  } catch (e) {
+    console.warn("fetchAllReportsFromCloud error:", e);
+    return [];
+  }
+}
+
+async function deleteReportFromCloud(id: string): Promise<void> {
+  try {
+    await supabase.storage.from(REPORTS_BUCKET).remove([`${id}.json`]);
+  } catch (e) {
+    console.warn("deleteReportFromCloud error:", e);
+  }
+}
+
+async function deleteMediaFromCloud(mediaUri: string): Promise<void> {
+  try {
+    if (!mediaUri.includes(SUPABASE_PUBLIC_URL)) return;
+    const parts = mediaUri.split(`/${MEDIA_BUCKET}/`);
+    if (parts.length > 1) {
+      const filename = parts[1].split("?")[0];
+      await supabase.storage.from(MEDIA_BUCKET).remove([filename]);
+    }
+  } catch {}
+}
+
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [reports, setReports] = useState<Report[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
-    loadLocalReports();
+    loadLocalCache();
   }, []);
 
-  const loadLocalReports = async () => {
+  const loadLocalCache = async () => {
     try {
-      const stored = await AsyncStorage.getItem(STORAGE_KEY);
+      const stored = await AsyncStorage.getItem(LOCAL_CACHE_KEY);
       if (stored) setReports(JSON.parse(stored));
     } catch {}
   };
 
-  const saveLocal = async (newReports: Report[]) => {
+  const saveLocalCache = async (newReports: Report[]) => {
     try {
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(newReports));
+      await AsyncStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(newReports));
     } catch {}
   };
 
   const refreshReports = useCallback(async (): Promise<{ newCount: number }> => {
     try {
-      const { data, error } = await supabase
-        .from("reports")
-        .select("*")
-        .order("submitted_at", { ascending: false });
-
-      if (error) {
-        console.warn("Erreur chargement signalements:", error.message);
-        return { newCount: 0 };
-      }
-
-      const normalised: Report[] = (data || []).map(mapRow);
+      const cloudReports = await fetchAllReportsFromCloud();
+      if (cloudReports.length === 0) return { newCount: 0 };
 
       const seenRaw = await AsyncStorage.getItem(SEEN_IDS_KEY);
       const seenIds: string[] = seenRaw ? JSON.parse(seenRaw) : [];
-      const newOnes = normalised.filter((r) => !seenIds.includes(r.id));
-      const allIds = normalised.map((r) => r.id);
+      const newOnes = cloudReports.filter((r) => !seenIds.includes(r.id));
+      const allIds = cloudReports.map((r) => r.id);
       await AsyncStorage.setItem(SEEN_IDS_KEY, JSON.stringify(allIds));
 
-      setReports(normalised);
-      saveLocal(normalised);
+      setReports(cloudReports);
+      saveLocalCache(cloudReports);
       return { newCount: newOnes.length };
     } catch (e) {
       console.warn("refreshReports error:", e);
@@ -164,12 +205,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const id = Date.now().toString() + Math.random().toString(36).substr(2, 9);
     const submittedAt = new Date().toISOString();
 
-    let mediaUrl: string | null = null;
-    let mediaType: string | null = null;
+    let mediaUri: string | undefined;
+    let mediaType: "photo" | "video" | undefined;
 
     if (mediaBase64 && mediaMimeType) {
-      mediaUrl = await uploadMedia(id, mediaBase64, mediaMimeType);
-      if (mediaUrl) {
+      const url = await uploadMedia(id, mediaBase64, mediaMimeType);
+      if (url) {
+        mediaUri = url;
         mediaType = mediaMimeType.startsWith("video") ? "video" : "photo";
       }
     }
@@ -180,33 +222,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       trackingCode,
       submittedAt,
       status: "pending",
-      mediaUri: mediaUrl || undefined,
-      mediaType: (mediaType || undefined) as Report["mediaType"],
+      mediaUri,
+      mediaType,
     };
 
     const updated = [newReport, ...reports];
     setReports(updated);
-    saveLocal(updated);
+    saveLocalCache(updated);
 
-    const { error } = await supabase.from("reports").insert({
-      id,
-      tracking_code: trackingCode,
-      reporter_name: reportData.reporterName,
-      reporter_age: reportData.reporterAge || "",
-      victim_age: reportData.victimAge || "",
-      abuse_type: reportData.abuseType || "sexual",
-      description: reportData.description,
-      location: reportData.location || "",
-      media_url: mediaUrl,
-      media_type: mediaType,
-      status: "pending",
-      submitted_at: submittedAt,
-      updated_at: submittedAt,
-    });
-
-    if (error) {
-      console.warn("Erreur insertion signalement:", error.message);
-    }
+    saveReportToCloud(newReport);
 
     return trackingCode;
   };
@@ -220,61 +244,31 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       r.id === id ? { ...r, status, ...(adminNote !== undefined ? { adminNote } : {}) } : r
     );
     setReports(updated);
-    saveLocal(updated);
+    saveLocalCache(updated);
 
-    const { error } = await supabase
-      .from("reports")
-      .update({
-        status,
-        admin_note: adminNote ?? null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", id);
-
-    if (error) console.warn("Erreur mise à jour statut:", error.message);
+    const report = updated.find((r) => r.id === id);
+    if (report) {
+      await saveReportToCloud(report);
+    }
   };
 
   const deleteReport = async (id: string) => {
     const report = reports.find((r) => r.id === id);
-
     const updated = reports.filter((r) => r.id !== id);
     setReports(updated);
-    saveLocal(updated);
+    saveLocalCache(updated);
 
-    if (report?.mediaUri && report.mediaUri.includes(SUPABASE_PUBLIC_URL)) {
-      try {
-        const parts = report.mediaUri.split(`/${MEDIA_BUCKET}/`);
-        if (parts.length > 1) {
-          const filename = parts[1].split("?")[0];
-          await supabase.storage.from(MEDIA_BUCKET).remove([filename]);
-        }
-      } catch {}
+    await deleteReportFromCloud(id);
+    if (report?.mediaUri) {
+      await deleteMediaFromCloud(report.mediaUri);
     }
-
-    const { error } = await supabase.from("reports").delete().eq("id", id);
-    if (error) console.warn("Erreur suppression:", error.message);
   };
 
   const getReportByCode = (code: string): Report | undefined =>
     reports.find((r) => r.trackingCode.toLowerCase() === code.toLowerCase());
 
   const fetchReportByCode = async (code: string): Promise<Report | null> => {
-    const upper = code.toUpperCase();
-    const local = reports.find((r) => r.trackingCode.toLowerCase() === upper.toLowerCase());
-    if (local) return local;
-
-    try {
-      const { data, error } = await supabase
-        .from("reports")
-        .select("id, tracking_code, abuse_type, status, admin_note, submitted_at")
-        .eq("tracking_code", upper)
-        .single();
-
-      if (error || !data) return null;
-      return mapRow(data);
-    } catch {
-      return null;
-    }
+    return reports.find((r) => r.trackingCode.toLowerCase() === code.toLowerCase()) ?? null;
   };
 
   const adminLogin = (password: string): boolean => {
