@@ -90,63 +90,84 @@ async function cloudUploadReport(report: Report): Promise<boolean> {
 }
 
 /**
- * Upload media file using expo-file-system uploadAsync.
- * This is the ONLY reliable way to upload files from React Native.
- * FileReader does not exist in Hermes/React Native.
+ * Upload media using multiple fallback methods for maximum Android compatibility.
+ * Method 1: FileSystem.readAsStringAsync (base64) + fetch binary body
+ * Method 2: FileSystem.uploadAsync (BINARY_CONTENT)
+ * Method 3: fetch(localUri) blob fallback
  */
 async function cloudUploadMedia(
   id: string,
   localUri: string,
   mimeType: string
 ): Promise<string | null> {
+  const ext = (() => {
+    const raw = mimeType.split("/")[1]?.split(";")[0]?.toLowerCase() || "jpg";
+    if (["jpg", "jpeg", "png", "mp4", "mov", "webm", "gif", "heic", "heif"].includes(raw)) return raw;
+    return mimeType.startsWith("video") ? "mp4" : "jpg";
+  })();
+  const filename = `${id}.${ext}`;
+  const uploadUrl = `${SUPABASE_URL}/storage/v1/object/${MEDIA_BUCKET}/${filename}`;
+  const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${MEDIA_BUCKET}/${filename}`;
+  const hdrs = { ...authHeaders(), "Content-Type": mimeType, "x-upsert": "true" };
+
+  // ── Method 1: base64 read → decode → fetch binary ────────────────────────
   try {
-    const ext = mimeType.split("/")[1]?.split(";")[0] || "jpg";
-    const safeExt = ["jpg", "jpeg", "png", "mp4", "mov", "webm", "gif", "heic", "heif"].includes(ext.toLowerCase())
-      ? ext.toLowerCase()
-      : mimeType.startsWith("video") ? "mp4" : "jpg";
-    const filename = `${id}.${safeExt}`;
-    const uploadUrl = `${SUPABASE_URL}/storage/v1/object/${MEDIA_BUCKET}/${filename}`;
+    console.log("[media] Method 1: readAsStringAsync base64...");
+    const base64 = await FileSystem.readAsStringAsync(localUri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+    // Decode base64 in chunks to avoid stack overflow on large files
+    const byteCount = Math.floor((base64.length * 3) / 4);
+    const bytes = new Uint8Array(byteCount);
+    let byteIdx = 0;
+    const CHUNK = 1024;
+    for (let i = 0; i < base64.length; i += CHUNK) {
+      const chunk = base64.slice(i, i + CHUNK);
+      const decoded = atob(chunk);
+      for (let j = 0; j < decoded.length; j++) {
+        if (byteIdx < byteCount) bytes[byteIdx++] = decoded.charCodeAt(j);
+      }
+    }
+    const res = await fetch(uploadUrl, { method: "POST", headers: hdrs, body: bytes });
+    if (res.ok) { console.log("[media] Method 1 success"); return publicUrl; }
+    const errText = await res.text();
+    console.warn("[media] Method 1 POST failed:", res.status, errText);
+    // Try PUT (upsert)
+    const res2 = await fetch(uploadUrl, { method: "PUT", headers: hdrs, body: bytes });
+    if (res2.ok) { console.log("[media] Method 1 PUT success"); return publicUrl; }
+    console.warn("[media] Method 1 PUT failed:", res2.status, await res2.text());
+  } catch (e) {
+    console.warn("[media] Method 1 error:", e);
+  }
 
-    console.log(`[media] Uploading ${filename} (${mimeType}) via FileSystem.uploadAsync...`);
-
-    const result = await FileSystem.uploadAsync(uploadUrl, localUri, {
+  // ── Method 2: FileSystem.uploadAsync ─────────────────────────────────────
+  try {
+    console.log("[media] Method 2: FileSystem.uploadAsync...");
+    const r = await FileSystem.uploadAsync(uploadUrl, localUri, {
       uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
       httpMethod: "POST",
-      headers: {
-        ...authHeaders(),
-        "Content-Type": mimeType,
-        "x-upsert": "true",
-      },
+      headers: hdrs,
     });
-
-    console.log(`[media] Upload result: status=${result.status}, body=${result.body?.substring(0, 100)}`);
-
-    if (result.status >= 200 && result.status < 300) {
-      return `${SUPABASE_URL}/storage/v1/object/public/${MEDIA_BUCKET}/${filename}`;
-    }
-
-    // Retry with PUT
-    const result2 = await FileSystem.uploadAsync(uploadUrl, localUri, {
-      uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
-      httpMethod: "PUT",
-      headers: {
-        ...authHeaders(),
-        "Content-Type": mimeType,
-        "x-upsert": "true",
-      },
-    });
-    console.log(`[media] PUT result: status=${result2.status}`);
-
-    if (result2.status >= 200 && result2.status < 300) {
-      return `${SUPABASE_URL}/storage/v1/object/public/${MEDIA_BUCKET}/${filename}`;
-    }
-
-    console.warn("[media] Upload failed after retry:", result2.status, result2.body?.substring(0, 200));
-    return null;
+    if (r.status >= 200 && r.status < 300) { console.log("[media] Method 2 success"); return publicUrl; }
+    console.warn("[media] Method 2 failed:", r.status, r.body?.substring(0, 100));
   } catch (e) {
-    console.warn("[media] cloudUploadMedia error:", e);
-    return null;
+    console.warn("[media] Method 2 error:", e);
   }
+
+  // ── Method 3: fetch blob ──────────────────────────────────────────────────
+  try {
+    console.log("[media] Method 3: fetch blob...");
+    const fileRes = await fetch(localUri);
+    const blob = await fileRes.blob();
+    const res = await fetch(uploadUrl, { method: "POST", headers: hdrs, body: blob });
+    if (res.ok) { console.log("[media] Method 3 success"); return publicUrl; }
+    console.warn("[media] Method 3 failed:", res.status, await res.text());
+  } catch (e) {
+    console.warn("[media] Method 3 error:", e);
+  }
+
+  console.warn("[media] All methods failed for:", localUri);
+  return null;
 }
 
 /** List all report filenames from cloud */
