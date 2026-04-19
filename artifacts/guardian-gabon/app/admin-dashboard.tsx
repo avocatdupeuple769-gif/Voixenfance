@@ -200,7 +200,15 @@ export default function AdminDashboardScreen() {
           { paddingBottom: (isWeb ? 34 : insets.bottom) + 20 },
         ]}
         renderItem={({ item }) => (
-          <ReportCard report={item} onPress={() => setSelectedReport(item)} isAdmin />
+          <ReportCard
+            report={item}
+            onPress={() => setSelectedReport(item)}
+            isAdmin
+            onQuickStatus={(status) => {
+              updateReportStatus(item.id, status);
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            }}
+          />
         )}
         ListEmptyComponent={
           <View style={styles.empty}>
