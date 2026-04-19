@@ -176,7 +176,7 @@ export default function HomeScreen() {
           {[
             { icon: "user-x" as const, text: "Signalez anonymement — votre identité est cachée du public" },
             { icon: "camera" as const, text: "Joignez des photos ou vidéos comme preuves" },
-            { icon: "lock" as const, text: "Seul l'administrateur voit les détails confidentiels" },
+            { icon: "lock" as const, text: "Seul l'administrateur voit les détails du dossier" },
             { icon: "life-buoy" as const, text: "Accédez aux ressources d'aide et de soutien" },
           ].map((item, i) => (
             <View key={i} style={styles.infoRow}>
