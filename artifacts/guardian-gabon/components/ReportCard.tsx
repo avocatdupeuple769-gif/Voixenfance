@@ -10,6 +10,7 @@ interface Props {
   onPress: () => void;
   isAdmin?: boolean;
   onQuickStatus?: (status: Report["status"]) => void;
+  onDelete?: () => void;
 }
 
 const STATUS_CONFIG = {
@@ -30,7 +31,7 @@ const QUICK_STATUSES: { key: Report["status"]; label: string }[] = [
   { key: "closed", label: "Traité" },
 ];
 
-export function ReportCard({ report, onPress, isAdmin = false, onQuickStatus }: Props) {
+export function ReportCard({ report, onPress, isAdmin = false, onQuickStatus, onDelete }: Props) {
   const colors = useColors();
   const status = STATUS_CONFIG[report.status];
   const date = new Date(report.submittedAt);
@@ -141,9 +142,23 @@ export function ReportCard({ report, onPress, isAdmin = false, onQuickStatus }: 
       {/* ══════ BOUTONS STATUT RAPIDE (admin uniquement) ══════ */}
       {isAdmin && onQuickStatus && (
         <View style={[styles.quickStatusRow, { borderTopColor: colors.border }]}>
-          <Text style={[styles.quickStatusLabel, { color: colors.mutedForeground }]}>
-            Changer le statut :
-          </Text>
+          <View style={styles.quickStatusHeader}>
+            <Text style={[styles.quickStatusLabel, { color: colors.mutedForeground }]}>
+              Changer le statut :
+            </Text>
+            {onDelete && (
+              <TouchableOpacity
+                style={[styles.deleteIconBtn, { borderColor: "#fca5a5", backgroundColor: "#fef2f2" }]}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  onDelete();
+                }}
+              >
+                <Feather name="trash-2" size={12} color="#dc2626" />
+                <Text style={styles.deleteIconText}>Supprimer</Text>
+              </TouchableOpacity>
+            )}
+          </View>
           <View style={styles.quickStatusBtns}>
             {QUICK_STATUSES.map((s) => {
               const cfg = STATUS_CONFIG[s.key];
@@ -164,17 +179,8 @@ export function ReportCard({ report, onPress, isAdmin = false, onQuickStatus }: 
                   }}
                   activeOpacity={0.8}
                 >
-                  <Feather
-                    name={cfg.icon}
-                    size={11}
-                    color={isActive ? "#fff" : cfg.color}
-                  />
-                  <Text
-                    style={[
-                      styles.quickBtnText,
-                      { color: isActive ? "#fff" : cfg.color },
-                    ]}
-                  >
+                  <Feather name={cfg.icon} size={11} color={isActive ? "#fff" : cfg.color} />
+                  <Text style={[styles.quickBtnText, { color: isActive ? "#fff" : cfg.color }]}>
                     {s.label}
                   </Text>
                 </TouchableOpacity>
@@ -247,11 +253,30 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     gap: 8,
   },
+  quickStatusHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
   quickStatusLabel: {
     fontSize: 11,
     fontWeight: "600",
     textTransform: "uppercase",
     letterSpacing: 0.3,
+  },
+  deleteIconBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  deleteIconText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#dc2626",
   },
   quickStatusBtns: {
     flexDirection: "row",
