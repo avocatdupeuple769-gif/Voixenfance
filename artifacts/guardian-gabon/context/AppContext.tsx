@@ -19,8 +19,13 @@ export interface Report {
 
 interface AppContextType {
   reports: Report[];
-  addReport: (report: Omit<Report, "id" | "submittedAt" | "status" | "trackingCode">) => Promise<string>;
+  addReport: (
+    report: Omit<Report, "id" | "submittedAt" | "status" | "trackingCode">,
+    mediaBase64?: string,
+    mediaMimeType?: string
+  ) => Promise<string>;
   updateReportStatus: (id: string, status: Report["status"], adminNote?: string) => Promise<void>;
+  deleteReport: (id: string) => Promise<void>;
   getReportByCode: (code: string) => Report | undefined;
   fetchReportByCode: (code: string) => Promise<Report | null>;
   isAdmin: boolean;
@@ -68,11 +73,21 @@ async function apiPatch(path: string, body: object): Promise<boolean> {
   try {
     const res = await fetch(`${API_BASE}${path}`, {
       method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        "x-admin-key": ADMIN_PASSWORD,
-      },
+      headers: { "Content-Type": "application/json", "x-admin-key": ADMIN_PASSWORD },
       body: JSON.stringify(body),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function apiDelete(path: string): Promise<boolean> {
+  if (!API_BASE) return false;
+  try {
+    const res = await fetch(`${API_BASE}${path}`, {
+      method: "DELETE",
+      headers: { "x-admin-key": ADMIN_PASSWORD },
     });
     return res.ok;
   } catch {
@@ -150,13 +165,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (isAdmin) {
-      refreshReports();
-    }
+    if (isAdmin) refreshReports();
   }, [isAdmin, refreshReports]);
 
   const addReport = async (
-    reportData: Omit<Report, "id" | "submittedAt" | "status" | "trackingCode">
+    reportData: Omit<Report, "id" | "submittedAt" | "status" | "trackingCode">,
+    mediaBase64?: string,
+    mediaMimeType?: string
   ): Promise<string> => {
     const trackingCode = generateTrackingCode();
     const id = Date.now().toString() + Math.random().toString(36).substr(2, 9);
@@ -183,8 +198,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       abuseType: reportData.abuseType,
       description: reportData.description,
       location: reportData.location,
-      mediaUri: reportData.mediaUri,
-      mediaType: reportData.mediaType,
+      mediaBase64: mediaBase64 || null,
+      mediaMimeType: mediaMimeType || null,
       submittedAt,
     });
 
@@ -204,15 +219,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     await apiPatch(`/reports/${id}/status`, { status, adminNote });
   };
 
-  const getReportByCode = (code: string): Report | undefined => {
-    return reports.find((r) => r.trackingCode.toLowerCase() === code.toLowerCase());
+  const deleteReport = async (id: string) => {
+    const updated = reports.filter((r) => r.id !== id);
+    setReports(updated);
+    saveLocal(updated);
+    await apiDelete(`/reports/${id}`);
   };
+
+  const getReportByCode = (code: string): Report | undefined =>
+    reports.find((r) => r.trackingCode.toLowerCase() === code.toLowerCase());
 
   const fetchReportByCode = async (code: string): Promise<Report | null> => {
     const normalised = code.toUpperCase();
     const local = reports.find((r) => r.trackingCode.toLowerCase() === normalised.toLowerCase());
     if (local) return local;
-
     if (!API_BASE) return null;
     try {
       const res = await apiFetch(`/reports/code/${encodeURIComponent(normalised)}`);
@@ -254,6 +274,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         reports,
         addReport,
         updateReportStatus,
+        deleteReport,
         getReportByCode,
         fetchReportByCode,
         isAdmin,
@@ -272,3 +293,5 @@ export function useApp() {
   if (!ctx) throw new Error("useApp must be used within AppProvider");
   return ctx;
 }
+
+export { API_BASE };
