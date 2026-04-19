@@ -1,5 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { router } from "expo-router";
 import React, { useState } from "react";
 import {
   Alert,
@@ -13,6 +14,8 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
+
+const ADMIN_EMAIL = "avocatdupeuple769@gmail.com";
 
 interface Resource {
   id: string;
@@ -300,6 +303,62 @@ export default function ResourcesScreen() {
           </View>
         ))}
 
+        {/* ═══ CONTACT ADMIN DISCRET ═══ */}
+        <View style={[styles.contactSection, { backgroundColor: "#0d2146", borderColor: "rgba(201,162,39,0.3)" }]}>
+          <View style={styles.contactHeaderRow}>
+            <View style={styles.contactIconWrap}>
+              <Feather name="mail" size={18} color="#c9a227" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.contactTitle}>Contacter l'administrateur</Text>
+              <Text style={styles.contactSub}>En toute discrétion et confidentialité</Text>
+            </View>
+          </View>
+          <Text style={styles.contactDesc}>
+            Si vous souhaitez nous joindre directement — pour signaler un problème, demander des informations ou obtenir de l'aide en dehors du formulaire — vous pouvez nous écrire par e-mail de façon discrète.
+          </Text>
+          <TouchableOpacity
+            style={styles.emailBtn}
+            activeOpacity={0.85}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              const subject = encodeURIComponent("VoixEnfance — Demande discrète");
+              const body = encodeURIComponent("Bonjour,\n\nJe souhaite vous contacter de façon discrète au sujet de :\n\n[Décrivez votre demande ici]\n\nCordialement.");
+              Linking.openURL(`mailto:${ADMIN_EMAIL}?subject=${subject}&body=${body}`).catch(() => {
+                Alert.alert(
+                  "Adresse e-mail",
+                  `Envoyez votre message à :\n\n${ADMIN_EMAIL}`,
+                  [{ text: "OK" }]
+                );
+              });
+            }}
+          >
+            <Feather name="send" size={16} color="#0d2146" />
+            <Text style={styles.emailBtnText}>Écrire un message confidentiel</Text>
+          </TouchableOpacity>
+          <Text style={styles.emailAddress}>{ADMIN_EMAIL}</Text>
+        </View>
+
+        {/* ═══ POLITIQUE DE CONFIDENTIALITÉ ═══ */}
+        <TouchableOpacity
+          style={[styles.privacyBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+          onPress={() => { Haptics.selectionAsync(); router.push("/privacy-policy"); }}
+          activeOpacity={0.8}
+        >
+          <View style={[styles.privacyIcon, { backgroundColor: "#eff6ff" }]}>
+            <Feather name="shield" size={18} color="#1a3a6b" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.privacyTitle, { color: colors.foreground }]}>
+              Politique de Confidentialité
+            </Text>
+            <Text style={[styles.privacySub, { color: colors.mutedForeground }]}>
+              Conforme au Code Pénal Gabonais — vos droits & protections
+            </Text>
+          </View>
+          <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+        </TouchableOpacity>
+
         <View style={[styles.disclaimer, { backgroundColor: "#f8fafc", borderColor: colors.border }]}>
           <Feather name="info" size={14} color={colors.mutedForeground} />
           <Text style={[styles.disclaimerText, { color: colors.mutedForeground }]}>
@@ -423,5 +482,89 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 17,
     flex: 1,
+  },
+
+  /* Contact admin */
+  contactSection: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 18,
+    gap: 12,
+    marginTop: 8,
+  },
+  contactHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  contactIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 13,
+    backgroundColor: "rgba(201,162,39,0.15)",
+    borderWidth: 1,
+    borderColor: "rgba(201,162,39,0.3)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  contactTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#ffffff",
+  },
+  contactSub: {
+    fontSize: 12,
+    color: "rgba(255,255,255,0.6)",
+    marginTop: 2,
+  },
+  contactDesc: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: "rgba(255,255,255,0.75)",
+  },
+  emailBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "#c9a227",
+    paddingVertical: 13,
+    borderRadius: 12,
+  },
+  emailBtnText: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#0d2146",
+  },
+  emailAddress: {
+    fontSize: 11,
+    color: "rgba(255,255,255,0.45)",
+    textAlign: "center",
+    fontStyle: "italic",
+  },
+
+  /* Privacy policy */
+  privacyBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  privacyIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  privacyTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  privacySub: {
+    fontSize: 12,
+    marginTop: 2,
   },
 });
