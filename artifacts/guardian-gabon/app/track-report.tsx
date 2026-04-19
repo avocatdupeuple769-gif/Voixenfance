@@ -4,6 +4,7 @@ import { useLocalSearchParams } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -17,48 +18,47 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useApp, type Report } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
 
-const STATUS_CONFIG = {
-  pending: {
-    label: "En attente de traitement",
-    sublabel: "Votre signalement a bien été reçu et sera examiné prochainement.",
+const STEPS: { key: Report["status"]; label: string; sublabel: string; icon: React.ComponentProps<typeof Feather>["name"]; color: string }[] = [
+  {
+    key: "pending",
+    label: "Signalement reçu",
+    sublabel: "Votre dossier a été enregistré par les autorités.",
+    icon: "inbox",
     color: "#d97706",
-    bg: "#fffbeb",
-    icon: "clock" as const,
   },
-  reviewed: {
-    label: "Dossier en cours de traitement",
-    sublabel: "Les autorités compétentes examinent activement votre signalement.",
+  {
+    key: "reviewed",
+    label: "En cours d'examen",
+    sublabel: "Les autorités examinent activement votre signalement.",
+    icon: "search",
     color: "#2563eb",
-    bg: "#eff6ff",
-    icon: "eye" as const,
   },
-  closed: {
-    label: "Dossier traité",
-    sublabel: "Votre signalement a été traité. Merci pour votre contribution.",
+  {
+    key: "closed",
+    label: "Dossier clôturé",
+    sublabel: "Le dossier a été traité. Merci pour votre signalement.",
+    icon: "check-circle",
     color: "#16a34a",
-    bg: "#f0fdf4",
-    icon: "check-circle" as const,
   },
-};
+];
 
-const ABUSE_LABELS = {
-  sexual: "Abus sexuel",
-  violence: "Violence",
-  both: "Abus sexuel & Violence",
-};
+const STATUS_INDEX: Record<Report["status"], number> = { pending: 0, reviewed: 1, closed: 2 };
+
+const ABUSE_LABELS = { sexual: "Abus sexuel", violence: "Violence", both: "Abus sexuel & Violence" };
 
 export default function TrackReportScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { getReportByCode, fetchReportByCode } = useApp();
+  const { fetchReportByCode } = useApp();
   const isWeb = Platform.OS === "web";
   const params = useLocalSearchParams<{ code?: string }>();
 
   const [code, setCode] = useState(params.code || "");
   const [result, setResult] = useState<Report | null | "not_found">(null);
   const [searched, setSearched] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-  // Si un code est passé en paramètre, lancer la recherche automatiquement
   useEffect(() => {
     if (params.code && params.code.trim()) {
       const normalised = normaliseCode(params.code.trim());
@@ -70,14 +70,11 @@ export default function TrackReportScreen() {
     }
   }, []);
 
-  // Normalise le code: accepte avec ou sans tiret
   const normaliseCode = (raw: string): string => {
     const clean = raw.toUpperCase().replace(/[^A-Z0-9]/g, "");
     if (clean.length === 8) return `${clean.slice(0, 4)}-${clean.slice(4)}`;
     return raw.toUpperCase();
   };
-
-  const [searching, setSearching] = useState(false);
 
   const handleSearch = async () => {
     if (!code.trim() || searching) return;
@@ -91,6 +88,16 @@ export default function TrackReportScreen() {
     setSearching(false);
   };
 
+  const handleRefreshStatus = async () => {
+    if (!result || result === "not_found" || refreshing) return;
+    Haptics.selectionAsync();
+    setRefreshing(true);
+    const fresh = await fetchReportByCode(result.trackingCode);
+    if (fresh) setResult(fresh);
+    setRefreshing(false);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  };
+
   const handleReset = () => {
     setCode("");
     setResult(null);
@@ -98,6 +105,7 @@ export default function TrackReportScreen() {
   };
 
   const bottomPad = isWeb ? 34 : insets.bottom;
+  const activeIndex = result && result !== "not_found" ? STATUS_INDEX[result.status] : -1;
 
   return (
     <KeyboardAvoidingView
@@ -110,7 +118,7 @@ export default function TrackReportScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* Header card */}
+        {/* Header */}
         <View style={[styles.headerCard, { backgroundColor: colors.primary }]}>
           <Feather name="search" size={24} color="#ffffff" />
           <Text style={styles.headerTitle}>Suivi de signalement</Text>
@@ -119,7 +127,6 @@ export default function TrackReportScreen() {
           </Text>
         </View>
 
-        {/* Info box */}
         <View style={[styles.infoBox, { backgroundColor: "#f0fdf4", borderColor: "#bbf7d0" }]}>
           <Feather name="shield" size={14} color="#15803d" />
           <Text style={[styles.infoText, { color: "#166534" }]}>
@@ -127,18 +134,11 @@ export default function TrackReportScreen() {
           </Text>
         </View>
 
-        {/* Search input */}
+        {/* Search */}
         <View style={[styles.searchCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.searchLabel, { color: colors.foreground }]}>
-            Code de suivi
-          </Text>
+          <Text style={[styles.searchLabel, { color: colors.foreground }]}>Code de suivi</Text>
           <View style={styles.searchRow}>
-            <View
-              style={[
-                styles.searchInput,
-                { borderColor: colors.border, backgroundColor: colors.background },
-              ]}
-            >
+            <View style={[styles.searchInput, { borderColor: colors.border, backgroundColor: colors.background }]}>
               <Feather name="hash" size={18} color={colors.mutedForeground} />
               <TextInput
                 style={[styles.input, { color: colors.foreground }]}
@@ -163,116 +163,139 @@ export default function TrackReportScreen() {
             >
               {searching
                 ? <ActivityIndicator size="small" color="#fff" />
-                : <Feather name="search" size={20} color="#fff" />
-              }
+                : <Feather name="search" size={20} color="#fff" />}
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* Results */}
+        {/* Not found */}
         {searched && result === "not_found" && (
           <View style={[styles.notFound, { backgroundColor: "#fef2f2", borderColor: "#fecaca" }]}>
             <Feather name="alert-circle" size={32} color="#dc2626" />
             <Text style={[styles.notFoundTitle, { color: "#dc2626" }]}>Code introuvable</Text>
             <Text style={[styles.notFoundText, { color: "#991b1b" }]}>
-              Aucun signalement ne correspond à ce code. Vérifiez que vous avez saisi le code correctement (majuscules et tiret inclus).
+              Aucun signalement ne correspond à ce code. Vérifiez que vous avez bien saisi le code (majuscules et tiret inclus).
             </Text>
-            <TouchableOpacity
-              style={[styles.resetBtn, { borderColor: "#dc2626" }]}
-              onPress={handleReset}
-            >
+            <TouchableOpacity style={[styles.resetBtn, { borderColor: "#dc2626" }]} onPress={handleReset}>
               <Text style={[styles.resetText, { color: "#dc2626" }]}>Réessayer</Text>
             </TouchableOpacity>
           </View>
         )}
 
+        {/* Result */}
         {searched && result && result !== "not_found" && (
           <View style={styles.resultBlock}>
-            {/* Status banner */}
-            {(() => {
-              const s = STATUS_CONFIG[result.status];
-              return (
-                <View style={[styles.statusBanner, { backgroundColor: s.bg, borderColor: s.color + "40" }]}>
-                  <View style={[styles.statusIconWrap, { backgroundColor: s.color + "20" }]}>
-                    <Feather name={s.icon} size={26} color={s.color} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.statusLabel, { color: s.color }]}>{s.label}</Text>
-                    <Text style={[styles.statusSublabel, { color: s.color + "cc" }]}>
-                      {s.sublabel}
-                    </Text>
-                  </View>
-                </View>
-              );
-            })()}
 
-            {/* Timeline */}
-            <View style={[styles.timelineCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <Text style={[styles.timelineTitle, { color: colors.foreground }]}>Progression du dossier</Text>
-              {(["pending", "reviewed", "closed"] as Report["status"][]).map((s, i) => {
-                const cfg = STATUS_CONFIG[s];
-                const isActive = result.status === s;
-                const isPast =
-                  (s === "pending") ||
-                  (s === "reviewed" && (result.status === "reviewed" || result.status === "closed")) ||
-                  (s === "closed" && result.status === "closed");
-                const labels = { pending: "Signalement reçu", reviewed: "En cours d'examen", closed: "Dossier clôturé" };
-                return (
-                  <View key={s} style={styles.timelineRow}>
-                    <View style={styles.timelineLeft}>
-                      <View
-                        style={[
-                          styles.timelineDot,
-                          {
-                            backgroundColor: isPast ? cfg.color : colors.muted,
-                            borderColor: isPast ? cfg.color : colors.border,
-                          },
-                        ]}
-                      >
-                        {isPast && <Feather name="check" size={10} color="#fff" />}
-                      </View>
-                      {i < 2 && (
+            {/* ══════════════════ BARRE DE PROGRESSION ══════════════════ */}
+            <View style={[styles.progressCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Text style={[styles.progressTitle, { color: colors.foreground }]}>
+                Progression du dossier
+              </Text>
+
+              {/* Barre horizontale */}
+              <View style={styles.progressBarWrap}>
+                {STEPS.map((step, i) => {
+                  const isDone = i <= activeIndex;
+                  const isActive = i === activeIndex;
+                  return (
+                    <React.Fragment key={step.key}>
+                      <View style={styles.progressStepWrap}>
+                        {/* Cercle */}
                         <View
                           style={[
-                            styles.timelineLine,
-                            { backgroundColor: isPast && result.status !== s ? cfg.color : colors.muted },
+                            styles.progressDot,
+                            {
+                              backgroundColor: isDone ? step.color : colors.muted,
+                              borderColor: isDone ? step.color : colors.border,
+                              width: isActive ? 40 : 32,
+                              height: isActive ? 40 : 32,
+                              borderRadius: isActive ? 20 : 16,
+                            },
+                          ]}
+                        >
+                          {isDone ? (
+                            <Feather
+                              name={isActive ? step.icon : "check"}
+                              size={isActive ? 18 : 14}
+                              color="#fff"
+                            />
+                          ) : (
+                            <View style={[styles.dotInner, { backgroundColor: colors.border }]} />
+                          )}
+                        </View>
+                        {/* Label sous le cercle */}
+                        <Text
+                          style={[
+                            styles.progressStepLabel,
+                            {
+                              color: isDone ? step.color : colors.mutedForeground,
+                              fontWeight: isActive ? "700" : "500",
+                            },
+                          ]}
+                          numberOfLines={2}
+                        >
+                          {step.label}
+                        </Text>
+                      </View>
+                      {/* Ligne entre étapes */}
+                      {i < STEPS.length - 1 && (
+                        <View
+                          style={[
+                            styles.progressLine,
+                            {
+                              backgroundColor: i < activeIndex ? STEPS[i].color : colors.border,
+                            },
                           ]}
                         />
                       )}
-                    </View>
-                    <View style={styles.timelineContent}>
-                      <Text
-                        style={[
-                          styles.timelineStep,
-                          { color: isPast ? colors.foreground : colors.mutedForeground, fontWeight: isActive ? "700" : "500" },
-                        ]}
-                      >
-                        {labels[s]}
-                      </Text>
-                      {isActive && (
-                        <Text style={[styles.timelineActive, { color: cfg.color }]}>
-                          Statut actuel
-                        </Text>
-                      )}
-                    </View>
-                  </View>
-                );
-              })}
+                    </React.Fragment>
+                  );
+                })}
+              </View>
+
+              {/* Message de l'étape active */}
+              <View
+                style={[
+                  styles.activeStepBanner,
+                  { backgroundColor: STEPS[activeIndex].color + "15", borderColor: STEPS[activeIndex].color + "40" },
+                ]}
+              >
+                <Feather name={STEPS[activeIndex].icon} size={18} color={STEPS[activeIndex].color} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.activeStepLabel, { color: STEPS[activeIndex].color }]}>
+                    {STEPS[activeIndex].label}
+                  </Text>
+                  <Text style={[styles.activeStepSub, { color: STEPS[activeIndex].color + "cc" }]}>
+                    {STEPS[activeIndex].sublabel}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Bouton actualiser */}
+              <TouchableOpacity
+                style={[styles.refreshBtn, { borderColor: colors.border, opacity: refreshing ? 0.6 : 1 }]}
+                onPress={handleRefreshStatus}
+                disabled={refreshing}
+                activeOpacity={0.8}
+              >
+                {refreshing
+                  ? <ActivityIndicator size="small" color={colors.mutedForeground} />
+                  : <Feather name="refresh-cw" size={14} color={colors.mutedForeground} />}
+                <Text style={[styles.refreshText, { color: colors.mutedForeground }]}>
+                  {refreshing ? "Mise à jour..." : "Actualiser le statut"}
+                </Text>
+              </TouchableOpacity>
             </View>
 
-            {/* Info */}
+            {/* Infos du dossier */}
             <View style={[styles.infoCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <View style={styles.infoRow}>
                 <Feather name="calendar" size={14} color={colors.mutedForeground} />
                 <View>
-                  <Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>
-                    Date de soumission
-                  </Text>
+                  <Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>Date de soumission</Text>
                   <Text style={[styles.infoValue, { color: colors.foreground }]}>
                     {new Date(result.submittedAt).toLocaleDateString("fr-GA", {
-                      day: "2-digit",
-                      month: "long",
-                      year: "numeric",
+                      day: "2-digit", month: "long", year: "numeric",
                     })}
                   </Text>
                 </View>
@@ -280,9 +303,7 @@ export default function TrackReportScreen() {
               <View style={styles.infoRow}>
                 <Feather name="alert-triangle" size={14} color={colors.mutedForeground} />
                 <View>
-                  <Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>
-                    Type d'abus signalé
-                  </Text>
+                  <Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>Type d'abus signalé</Text>
                   <Text style={[styles.infoValue, { color: colors.foreground }]}>
                     {ABUSE_LABELS[result.abuseType]}
                   </Text>
@@ -293,7 +314,7 @@ export default function TrackReportScreen() {
                   <Feather name="message-square" size={14} color="#15803d" />
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.infoLabel, { color: "#15803d" }]}>
-                      Note des autorités
+                      Message des autorités
                     </Text>
                     <Text style={[styles.infoValue, { color: "#166534" }]}>{result.adminNote}</Text>
                   </View>
@@ -305,7 +326,7 @@ export default function TrackReportScreen() {
               style={[styles.resetBtn2, { borderColor: colors.border }]}
               onPress={handleReset}
             >
-              <Feather name="refresh-cw" size={14} color={colors.mutedForeground} />
+              <Feather name="arrow-left" size={14} color={colors.mutedForeground} />
               <Text style={[styles.resetText2, { color: colors.mutedForeground }]}>
                 Rechercher un autre code
               </Text>
@@ -313,7 +334,7 @@ export default function TrackReportScreen() {
           </View>
         )}
 
-        {/* How it works */}
+        {/* Comment obtenir le code */}
         {!searched && (
           <View style={[styles.howCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Text style={[styles.howTitle, { color: colors.primary }]}>Comment obtenir mon code ?</Text>
@@ -321,9 +342,7 @@ export default function TrackReportScreen() {
               Votre code de suivi à 8 caractères (format XXXX-XXXX) vous est donné automatiquement après avoir soumis un signalement. Conservez-le précieusement — il est votre seul moyen de suivre l'avancement de votre dossier.
             </Text>
             <View style={[styles.exampleCode, { backgroundColor: colors.secondary }]}>
-              <Text style={[styles.exampleText, { color: colors.primary }]}>
-                Exemple : KBJM-4R8Z
-              </Text>
+              <Text style={[styles.exampleText, { color: colors.primary }]}>Exemple : KBJM-4R8Z</Text>
             </View>
           </View>
         )}
@@ -335,245 +354,58 @@ export default function TrackReportScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   scroll: { flex: 1 },
-  content: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    gap: 14,
-  },
-  headerCard: {
-    borderRadius: 16,
-    padding: 20,
-    alignItems: "center",
-    gap: 8,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#ffffff",
-    textAlign: "center",
-  },
-  headerSubtitle: {
-    fontSize: 13,
-    color: "rgba(255,255,255,0.8)",
-    textAlign: "center",
-    lineHeight: 18,
-  },
-  infoBox: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 8,
-    padding: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-  },
-  infoText: {
-    fontSize: 13,
-    lineHeight: 18,
-    flex: 1,
-    fontWeight: "500",
-  },
-  searchCard: {
-    borderRadius: 14,
-    borderWidth: 1,
-    padding: 16,
-    gap: 10,
-  },
-  searchLabel: {
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  searchRow: {
-    flexDirection: "row",
-    gap: 10,
-  },
-  searchInput: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  input: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: "700",
-    letterSpacing: 1,
-  },
-  searchBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  notFound: {
-    borderRadius: 14,
-    borderWidth: 1,
-    padding: 24,
-    alignItems: "center",
-    gap: 10,
-  },
-  notFoundTitle: {
-    fontSize: 17,
-    fontWeight: "700",
-  },
-  notFoundText: {
-    fontSize: 13,
-    lineHeight: 18,
-    textAlign: "center",
-  },
-  resetBtn: {
-    borderWidth: 1.5,
-    borderRadius: 10,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    marginTop: 4,
-  },
-  resetText: {
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  resultBlock: {
-    gap: 12,
-  },
-  statusBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 14,
-    padding: 16,
-    borderRadius: 14,
-    borderWidth: 1,
-  },
-  statusIconWrap: {
-    width: 52,
-    height: 52,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  statusLabel: {
-    fontSize: 15,
-    fontWeight: "700",
-    lineHeight: 20,
-  },
-  statusSublabel: {
-    fontSize: 12,
-    lineHeight: 17,
-    marginTop: 2,
-  },
-  timelineCard: {
-    borderRadius: 14,
-    borderWidth: 1,
-    padding: 16,
-    gap: 0,
-  },
-  timelineTitle: {
-    fontSize: 13,
-    fontWeight: "700",
-    marginBottom: 14,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  timelineRow: {
-    flexDirection: "row",
-    gap: 14,
-  },
-  timelineLeft: {
-    alignItems: "center",
-    width: 24,
-  },
-  timelineDot: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 2,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  timelineLine: {
-    width: 2,
-    flex: 1,
-    minHeight: 24,
-    marginVertical: 4,
-  },
-  timelineContent: {
-    flex: 1,
-    paddingBottom: 16,
-  },
-  timelineStep: {
-    fontSize: 14,
-  },
-  timelineActive: {
-    fontSize: 11,
-    fontWeight: "600",
-    marginTop: 2,
-  },
-  infoCard: {
-    borderRadius: 14,
-    borderWidth: 1,
-    padding: 16,
-    gap: 14,
-  },
-  infoRow: {
-    flexDirection: "row",
-    gap: 10,
-    alignItems: "flex-start",
-  },
-  infoLabel: {
-    fontSize: 11,
-    fontWeight: "500",
-    marginBottom: 2,
-  },
-  infoValue: {
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  noteBox: {
-    flexDirection: "row",
-    gap: 10,
-    padding: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    alignItems: "flex-start",
-  },
-  resetBtn2: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    paddingVertical: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-  },
-  resetText2: {
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  howCard: {
-    borderRadius: 14,
-    borderWidth: 1,
-    padding: 16,
-    gap: 10,
-  },
-  howTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  howText: {
-    fontSize: 13,
-    lineHeight: 19,
-  },
-  exampleCode: {
-    borderRadius: 8,
-    padding: 10,
-    alignItems: "center",
-  },
-  exampleText: {
-    fontSize: 16,
-    fontWeight: "800",
-    letterSpacing: 2,
-  },
+  content: { paddingHorizontal: 16, paddingTop: 16, gap: 14 },
+  headerCard: { borderRadius: 16, padding: 20, alignItems: "center", gap: 8 },
+  headerTitle: { fontSize: 18, fontWeight: "800", color: "#ffffff", textAlign: "center" },
+  headerSubtitle: { fontSize: 13, color: "rgba(255,255,255,0.8)", textAlign: "center", lineHeight: 18 },
+  infoBox: { flexDirection: "row", alignItems: "flex-start", gap: 8, padding: 12, borderRadius: 10, borderWidth: 1 },
+  infoText: { fontSize: 13, lineHeight: 18, flex: 1, fontWeight: "500" },
+  searchCard: { borderRadius: 14, borderWidth: 1, padding: 16, gap: 10 },
+  searchLabel: { fontSize: 14, fontWeight: "700" },
+  searchRow: { flexDirection: "row", gap: 10 },
+  searchInput: { flex: 1, flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12 },
+  input: { flex: 1, fontSize: 16, fontWeight: "700", letterSpacing: 1 },
+  searchBtn: { width: 48, height: 48, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  notFound: { borderRadius: 14, borderWidth: 1, padding: 24, alignItems: "center", gap: 10 },
+  notFoundTitle: { fontSize: 17, fontWeight: "700" },
+  notFoundText: { fontSize: 13, lineHeight: 18, textAlign: "center" },
+  resetBtn: { borderWidth: 1.5, borderRadius: 10, paddingHorizontal: 20, paddingVertical: 10, marginTop: 4 },
+  resetText: { fontSize: 14, fontWeight: "700" },
+  resultBlock: { gap: 12 },
+
+  /* Progress card */
+  progressCard: { borderRadius: 14, borderWidth: 1, padding: 16, gap: 16 },
+  progressTitle: { fontSize: 13, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5 },
+
+  /* Barre horizontale */
+  progressBarWrap: { flexDirection: "row", alignItems: "flex-start", justifyContent: "center" },
+  progressStepWrap: { alignItems: "center", width: 80, gap: 8 },
+  progressDot: { alignItems: "center", justifyContent: "center", borderWidth: 2.5 },
+  dotInner: { width: 8, height: 8, borderRadius: 4 },
+  progressStepLabel: { fontSize: 11, textAlign: "center", lineHeight: 14 },
+  progressLine: { flex: 1, height: 3, borderRadius: 2, marginTop: 16 },
+
+  /* Bannière étape active */
+  activeStepBanner: { flexDirection: "row", alignItems: "center", gap: 12, padding: 12, borderRadius: 12, borderWidth: 1 },
+  activeStepLabel: { fontSize: 14, fontWeight: "700" },
+  activeStepSub: { fontSize: 12, marginTop: 2, lineHeight: 16 },
+
+  /* Bouton actualiser */
+  refreshBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 10, borderRadius: 10, borderWidth: 1 },
+  refreshText: { fontSize: 13, fontWeight: "600" },
+
+  /* Info card */
+  infoCard: { borderRadius: 14, borderWidth: 1, padding: 16, gap: 14 },
+  infoRow: { flexDirection: "row", gap: 10, alignItems: "flex-start" },
+  infoLabel: { fontSize: 11, fontWeight: "500", marginBottom: 2 },
+  infoValue: { fontSize: 14, fontWeight: "600" },
+  noteBox: { flexDirection: "row", gap: 10, padding: 12, borderRadius: 10, borderWidth: 1, alignItems: "flex-start" },
+
+  resetBtn2: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 12, borderRadius: 10, borderWidth: 1 },
+  resetText2: { fontSize: 14, fontWeight: "600" },
+  howCard: { borderRadius: 14, borderWidth: 1, padding: 16, gap: 10 },
+  howTitle: { fontSize: 14, fontWeight: "700" },
+  howText: { fontSize: 13, lineHeight: 19 },
+  exampleCode: { borderRadius: 8, padding: 10, alignItems: "center" },
+  exampleText: { fontSize: 16, fontWeight: "800", letterSpacing: 2 },
 });
