@@ -21,6 +21,26 @@ import { useColors } from "@/hooks/useColors";
 
 type AbuseType = "sexual" | "violence" | "both";
 
+async function uriToBase64(uri: string): Promise<{ data: string; mimeType: string } | null> {
+  try {
+    const response = await fetch(uri);
+    const blob = await response.blob();
+    const mimeType = blob.type || "image/jpeg";
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        const base64 = result.split(",")[1];
+        resolve(base64 ? { data: base64, mimeType } : null);
+      };
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
+
 export default function ReportScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -44,13 +64,13 @@ export default function ReportScreen() {
       Alert.alert("Info", "La sélection de médias est disponible sur l'application mobile.");
       return;
     }
-    Alert.alert("Ajouter un élément", "Choisissez le type de fichier", [
+    Alert.alert("Ajouter une preuve", "Choisissez le type de fichier", [
       {
         text: "Photo",
         onPress: async () => {
           const result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            quality: 0.8,
+            quality: 0.7,
           });
           if (!result.canceled && result.assets[0]) {
             setMediaUri(result.assets[0].uri);
@@ -63,7 +83,7 @@ export default function ReportScreen() {
         onPress: async () => {
           const result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ImagePicker.MediaTypeOptions.Videos,
-            quality: 0.8,
+            quality: 0.6,
           });
           if (!result.canceled && result.assets[0]) {
             setMediaUri(result.assets[0].uri);
@@ -97,16 +117,33 @@ export default function ReportScreen() {
     setSubmitting(true);
 
     try {
-      const code = await addReport({
-        reporterName: reporterName.trim(),
-        reporterAge: reporterAge.trim(),
-        victimAge: victimAge.trim(),
-        abuseType,
-        description: description.trim(),
-        location: location.trim(),
-        mediaUri,
-        mediaType,
-      });
+      let mediaBase64: string | undefined;
+      let mediaMimeType: string | undefined;
+
+      if (mediaUri && mediaType === "photo") {
+        const encoded = await uriToBase64(mediaUri);
+        if (encoded) {
+          mediaBase64 = encoded.data;
+          mediaMimeType = encoded.mimeType;
+        }
+      } else if (mediaUri && mediaType === "video") {
+        mediaMimeType = "video/mp4";
+      }
+
+      const code = await addReport(
+        {
+          reporterName: reporterName.trim(),
+          reporterAge: reporterAge.trim(),
+          victimAge: victimAge.trim(),
+          abuseType,
+          description: description.trim(),
+          location: location.trim(),
+          mediaUri,
+          mediaType,
+        },
+        mediaBase64,
+        mediaMimeType
+      );
       setSubmitting(false);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.replace({ pathname: "/report-success", params: { code } });
@@ -178,16 +215,10 @@ export default function ReportScreen() {
           </View>
         </View>
 
-        <Text style={[styles.sectionTitle, { color: colors.foreground, marginTop: 8 }]}>
-          Type d'abus
-        </Text>
+        <Text style={[styles.sectionTitle, { color: colors.foreground, marginTop: 8 }]}>Type d'abus</Text>
         <View style={styles.typeRow}>
           {(["sexual", "violence", "both"] as AbuseType[]).map((type) => {
-            const labels = {
-              sexual: "Abus sexuel",
-              violence: "Violence",
-              both: "Les deux",
-            };
+            const labels = { sexual: "Abus sexuel", violence: "Violence", both: "Les deux" };
             const isSelected = abuseType === type;
             return (
               <TouchableOpacity
@@ -199,17 +230,9 @@ export default function ReportScreen() {
                     borderColor: isSelected ? colors.primary : colors.border,
                   },
                 ]}
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  setAbuseType(type);
-                }}
+                onPress={() => { Haptics.selectionAsync(); setAbuseType(type); }}
               >
-                <Text
-                  style={[
-                    styles.typeLabel,
-                    { color: isSelected ? colors.primaryForeground : colors.foreground },
-                  ]}
-                >
+                <Text style={[styles.typeLabel, { color: isSelected ? colors.primaryForeground : colors.foreground }]}>
                   {labels[type]}
                 </Text>
               </TouchableOpacity>
@@ -231,21 +254,18 @@ export default function ReportScreen() {
         <View style={styles.fieldGroup}>
           <View style={styles.labelRow}>
             <Text style={[styles.label, { color: colors.foreground }]}>Description détaillée *</Text>
-            <Text style={[styles.wordCount, { color: descWordCount >= 50 ? colors.success : colors.mutedForeground }]}>
+            <Text style={[styles.wordCount, { color: descWordCount >= 50 ? "#16a34a" : colors.mutedForeground }]}>
               {descWordCount} / 1000 mots
             </Text>
           </View>
           <TextInput
-            style={[
-              styles.textarea,
-              { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card },
-            ]}
+            style={[styles.textarea, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]}
             value={description}
             onChangeText={(t) => {
               const words = t.trim().split(/\s+/).filter(Boolean).length;
               if (words <= 1000) setDescription(t);
             }}
-            placeholder="Décrivez avec précision ce qui s'est passé : les faits, le contexte, les personnes impliquées, les dates et lieux... Toutes les informations resteront confidentielles."
+            placeholder="Décrivez avec précision ce qui s'est passé : les faits, le contexte, les personnes impliquées, les dates et lieux..."
             placeholderTextColor={colors.mutedForeground}
             multiline
             numberOfLines={10}
@@ -267,7 +287,7 @@ export default function ReportScreen() {
                 </View>
               )}
               <TouchableOpacity
-                style={[styles.removeMedia, { backgroundColor: colors.destructive }]}
+                style={[styles.removeMedia, { backgroundColor: "#ef4444" }]}
                 onPress={() => { setMediaUri(undefined); setMediaType(undefined); }}
               >
                 <Feather name="x" size={16} color="#fff" />
@@ -289,10 +309,7 @@ export default function ReportScreen() {
         </View>
 
         <TouchableOpacity
-          style={[
-            styles.submitButton,
-            { backgroundColor: submitting ? colors.muted : colors.primary },
-          ]}
+          style={[styles.submitButton, { backgroundColor: submitting ? colors.muted : colors.primary }]}
           onPress={handleSubmit}
           disabled={submitting}
           activeOpacity={0.85}
@@ -312,17 +329,9 @@ export default function ReportScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-  },
-  scroll: {
-    flex: 1,
-  },
-  content: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    gap: 14,
-  },
+  root: { flex: 1 },
+  scroll: { flex: 1 },
+  content: { paddingHorizontal: 16, paddingTop: 16, gap: 14 },
   confidentialBadge: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -331,36 +340,13 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
   },
-  confidentialText: {
-    fontSize: 12,
-    lineHeight: 17,
-    flex: 1,
-    fontWeight: "500",
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  sectionNote: {
-    fontSize: 12,
-    marginTop: -8,
-  },
-  fieldGroup: {
-    gap: 6,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  labelRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  wordCount: {
-    fontSize: 12,
-    fontWeight: "500",
-  },
+  confidentialText: { fontSize: 12, lineHeight: 17, flex: 1, fontWeight: "500" },
+  sectionTitle: { fontSize: 16, fontWeight: "700" },
+  sectionNote: { fontSize: 12, marginTop: -8 },
+  fieldGroup: { gap: 6 },
+  label: { fontSize: 14, fontWeight: "600" },
+  labelRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  wordCount: { fontSize: 12, fontWeight: "500" },
   input: {
     borderWidth: 1,
     borderRadius: 10,
@@ -376,14 +362,8 @@ const styles = StyleSheet.create({
     fontSize: 15,
     minHeight: 200,
   },
-  row: {
-    flexDirection: "row",
-    gap: 12,
-  },
-  typeRow: {
-    flexDirection: "row",
-    gap: 8,
-  },
+  row: { flexDirection: "row", gap: 12 },
+  typeRow: { flexDirection: "row", gap: 8 },
   typeButton: {
     flex: 1,
     paddingVertical: 10,
@@ -391,11 +371,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     alignItems: "center",
   },
-  typeLabel: {
-    fontSize: 13,
-    fontWeight: "600",
-    textAlign: "center",
-  },
+  typeLabel: { fontSize: 13, fontWeight: "600", textAlign: "center" },
   mediaButton: {
     borderWidth: 1.5,
     borderStyle: "dashed",
@@ -404,23 +380,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
   },
-  mediaButtonText: {
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  mediaNote: {
-    fontSize: 12,
-  },
-  mediaPreview: {
-    borderRadius: 12,
-    overflow: "hidden",
-    position: "relative",
-  },
-  mediaImage: {
-    width: "100%",
-    height: 180,
-    borderRadius: 12,
-  },
+  mediaButtonText: { fontSize: 14, fontWeight: "600" },
+  mediaNote: { fontSize: 12 },
+  mediaPreview: { borderRadius: 12, overflow: "hidden", position: "relative" },
+  mediaImage: { width: "100%", height: 180, borderRadius: 12 },
   videoPlaceholder: {
     height: 120,
     borderRadius: 12,
@@ -428,10 +391,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 8,
   },
-  videoLabel: {
-    fontSize: 14,
-    fontWeight: "600",
-  },
+  videoLabel: { fontSize: 14, fontWeight: "600" },
   removeMedia: {
     position: "absolute",
     top: 8,
@@ -451,9 +411,5 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     marginTop: 8,
   },
-  submitText: {
-    color: "#ffffff",
-    fontSize: 16,
-    fontWeight: "700",
-  },
+  submitText: { color: "#ffffff", fontSize: 16, fontWeight: "700" },
 });
