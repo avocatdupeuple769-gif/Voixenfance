@@ -3,6 +3,7 @@ import path from "path";
 
 const DATA_DIR = path.join(process.cwd(), "data");
 const REPORTS_FILE = path.join(DATA_DIR, "reports.json");
+export const UPLOADS_DIR = path.join(DATA_DIR, "uploads");
 
 export interface StoredReport {
   id: string;
@@ -22,9 +23,8 @@ export interface StoredReport {
 }
 
 function ensureDir() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
+  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+  if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 }
 
 function readAll(): StoredReport[] {
@@ -74,5 +74,14 @@ export const store = {
       };
     });
     writeAll(all);
+  },
+
+  deleteById(id: string): StoredReport | undefined {
+    const all = readAll();
+    const target = all.find((r) => r.id === id);
+    if (target) {
+      writeAll(all.filter((r) => r.id !== id));
+    }
+    return target;
   },
 };
