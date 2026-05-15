@@ -37,7 +37,7 @@ const EMERGENCY_CONTACTS = [
   {
     id: "ailes",
     name: "Ailes de Bride",
-    number: "+241 77 XX XX XX",
+    number: "+241 04 61 18 38",
     subtitle: "Association",
     icon: "heart" as const,
   },
