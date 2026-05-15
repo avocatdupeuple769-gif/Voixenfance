@@ -51,7 +51,9 @@ export default function ReportScreen() {
         onPress: async () => {
           const result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            quality: 0.7,
+            quality: 0.4,
+            allowsEditing: true,
+            exifData: false,
           });
           if (!result.canceled && result.assets[0]) {
             const asset = result.assets[0];
@@ -72,7 +74,8 @@ export default function ReportScreen() {
         onPress: async () => {
           const result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ImagePicker.MediaTypeOptions.Videos,
-            quality: 0.6,
+            quality: 0.4,
+            videoMaxDuration: 60,
           });
           if (!result.canceled && result.assets[0]) {
             const asset = result.assets[0];
