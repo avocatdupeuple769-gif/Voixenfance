@@ -93,9 +93,8 @@ export default function HomeScreen() {
 
           <View style={styles.heroText}>
             <View style={styles.nameRow}>
-              <Text style={[styles.nameRose]}>Les Ailes</Text>
-              <Text style={{ fontSize: 19, fontWeight: "800", color: "#9ca3af" }}> de </Text>
-              <Text style={[styles.nameBlue]}>Bride</Text>
+              <Text style={[styles.nameRose]}>Les Ailes </Text>
+              <Text style={[styles.nameBlue]}>de Bride</Text>
             </View>
             <Text style={styles.tagline}>Protection de l'enfance au Gabon</Text>
           </View>
