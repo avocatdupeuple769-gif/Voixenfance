@@ -15,7 +15,7 @@ import { useColors } from "@/hooks/useColors";
 const EMERGENCY_CONTACTS = [
   {
     id: "police",
-    name: "Police Nationale",
+    name: "Police",
     number: "1730",
     subtitle: "Commissariat",
     icon: "shield" as const,
@@ -31,8 +31,15 @@ const EMERGENCY_CONTACTS = [
     id: "samu",
     name: "SAMU",
     number: "1300",
-    subtitle: "Urgences médicales",
+    subtitle: "Urgences",
     icon: "activity" as const,
+  },
+  {
+    id: "ailes",
+    name: "Ailes de Bride",
+    number: "+241 77 XX XX XX",
+    subtitle: "Association",
+    icon: "heart" as const,
   },
 ];
 
@@ -47,13 +54,13 @@ export function EmergencyBanner() {
     }
     Alert.alert(
       "Appel d'urgence",
-      `Appeler le ${contact.name} au ${contact.number} ?`,
+      `Appeler ${contact.name} au ${contact.number} ?`,
       [
         { text: "Annuler", style: "cancel" },
         {
-          text: `Appeler ${contact.number}`,
+          text: `Appeler`,
           style: "destructive",
-          onPress: () => Linking.openURL(`tel:${contact.number}`),
+          onPress: () => Linking.openURL(`tel:${contact.number.replace(/\s/g, "")}`),
         },
       ]
     );
@@ -71,12 +78,17 @@ export function EmergencyBanner() {
         {EMERGENCY_CONTACTS.map((contact) => (
           <TouchableOpacity
             key={contact.id}
-            style={[styles.callButton, { backgroundColor: "rgba(255,255,255,0.2)" }]}
+            style={[
+              styles.callButton,
+              contact.id === "ailes"
+                ? { backgroundColor: "rgba(233,30,140,0.25)", borderWidth: 1, borderColor: "rgba(255,255,255,0.4)" }
+                : { backgroundColor: "rgba(255,255,255,0.2)" },
+            ]}
             onPress={() => handleCall(contact)}
             activeOpacity={0.7}
           >
-            <Feather name={contact.icon} size={18} color={colors.emergencyForeground} />
-            <Text style={[styles.callNumber, { color: colors.emergencyForeground }]}>
+            <Feather name={contact.icon} size={16} color={colors.emergencyForeground} />
+            <Text style={[styles.callNumber, { color: colors.emergencyForeground, fontSize: contact.id === "ailes" ? 10 : 18 }]}>
               {contact.number}
             </Text>
             <Text style={[styles.callName, { color: "rgba(255,255,255,0.85)" }]}>
@@ -109,21 +121,22 @@ const styles = StyleSheet.create({
   },
   buttonsRow: {
     flexDirection: "row",
-    gap: 8,
+    gap: 6,
     justifyContent: "center",
   },
   callButton: {
     flex: 1,
     alignItems: "center",
     paddingVertical: 10,
-    paddingHorizontal: 8,
+    paddingHorizontal: 6,
     borderRadius: 10,
     gap: 3,
   },
   callNumber: {
     fontSize: 18,
     fontWeight: "800",
-    letterSpacing: 1,
+    letterSpacing: 0.5,
+    textAlign: "center",
   },
   callName: {
     fontSize: 9,
