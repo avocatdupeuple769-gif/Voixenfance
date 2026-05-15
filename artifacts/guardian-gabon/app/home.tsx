@@ -92,10 +92,11 @@ export default function HomeScreen() {
           </TouchableOpacity>
 
           <View style={styles.heroText}>
-            <View style={styles.nameRow}>
-              <Text style={[styles.nameRose]}>Les Ailes </Text>
-              <Text style={[styles.nameBlue]}>de Bride</Text>
-            </View>
+            <Text style={styles.nameFull}>
+              <Text style={styles.nameRose}>Les Ailes</Text>
+              <Text style={styles.nameRose}>{"  "}</Text>
+              <Text style={styles.nameBlue}>de Bride</Text>
+            </Text>
             <Text style={styles.tagline}>Protection de l'enfance au Gabon</Text>
           </View>
 
@@ -273,6 +274,7 @@ const styles = StyleSheet.create({
   logoImg: { width: 50, height: 50 },
   heroText: { flex: 1 },
   nameRow: { flexDirection: "row", alignItems: "baseline" },
+  nameFull: { fontSize: 19, fontWeight: "800", letterSpacing: -0.4 },
   nameRose: { fontSize: 19, fontWeight: "800", color: ROSE, letterSpacing: -0.4 },
   nameBlue: { fontSize: 19, fontWeight: "800", color: BLUE, letterSpacing: -0.4 },
   tagline: { fontSize: 11, color: "#6b7280", marginTop: 1 },
