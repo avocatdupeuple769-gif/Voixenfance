@@ -17,7 +17,7 @@ import { EmergencyBanner } from "@/components/EmergencyBanner";
 import { useApp } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
 
-const ASSO_PHONE = "+241 77 XX XX XX";
+const ASSO_PHONE = "+241 04 61 18 38";
 
 const ABUSE_TYPES = [
   {
