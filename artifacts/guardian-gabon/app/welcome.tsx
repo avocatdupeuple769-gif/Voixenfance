@@ -25,6 +25,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const { width, height } = Dimensions.get("window");
 
+const PINK = "#E91E8C";
+const BLUE = "#1565C0";
+const DARK = "#0a1628";
+
 export default function WelcomeScreen() {
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
@@ -56,24 +60,21 @@ export default function WelcomeScreen() {
 
   return (
     <View style={styles.root}>
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: "#0d2146" }]} />
-      <View style={[styles.gradientOverlay, { backgroundColor: "#1a3a6b" }]} />
-      <View style={styles.goldAccent} />
-      <View style={styles.goldAccentBottom} />
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: DARK }]} />
+      <View style={[styles.gradientOverlay, { backgroundColor: BLUE }]} />
+      <View style={styles.pinkAccent} />
+      <View style={styles.pinkAccentBottom} />
 
-      {/* Decorative circles */}
       <View style={[styles.circle, styles.circle1]} />
       <View style={[styles.circle, styles.circle2]} />
       <View style={[styles.circle, styles.circle3]} />
 
       <View style={[styles.content, { paddingTop: topPad + 20, paddingBottom: bottomPad + 20 }]}>
-        {/* Badge */}
         <Animated.View entering={FadeInDown.delay(200).duration(600)} style={styles.topBadge}>
           <View style={styles.badgeDot} />
           <Text style={styles.badgeText}>GABON — Protection de l'Enfance</Text>
         </Animated.View>
 
-        {/* Logo */}
         <View style={styles.logoSection}>
           <Animated.View style={[styles.glowRing, glowStyle]} />
           <Animated.View entering={FadeIn.delay(300).duration(800)} style={styles.logoContainer}>
@@ -85,24 +86,21 @@ export default function WelcomeScreen() {
           </Animated.View>
         </View>
 
-        {/* Name */}
         <Animated.View entering={FadeInUp.delay(500).duration(700)} style={styles.nameBlock}>
-          <Text style={styles.appName}>Voix</Text>
-          <Text style={styles.appNameGold}>Enfance</Text>
+          <Text style={styles.appName}>Les Ailes</Text>
+          <Text style={styles.appNamePink}> de Bride</Text>
         </Animated.View>
 
         <Animated.Text entering={FadeInUp.delay(630).duration(600)} style={styles.tagline}>
-          La voix des enfants du Gabon
+          La protection des enfants du Gabon
         </Animated.Text>
 
-        {/* Divider */}
         <Animated.View entering={FadeIn.delay(700).duration(600)} style={styles.divider}>
           <View style={styles.dividerLine} />
-          <Feather name="shield" size={13} color="#c9a227" />
+          <Feather name="heart" size={13} color={PINK} />
           <View style={styles.dividerLine} />
         </Animated.View>
 
-        {/* Features */}
         <Animated.View entering={FadeInUp.delay(800).duration(600)} style={styles.descBlock}>
           {[
             { icon: "user-x" as const, text: "Signalez anonymement — votre identité est protégée" },
@@ -112,7 +110,7 @@ export default function WelcomeScreen() {
           ].map((item, i) => (
             <View key={i} style={styles.descRow}>
               <View style={styles.descIconWrap}>
-                <Feather name={item.icon} size={14} color="#c9a227" />
+                <Feather name={item.icon} size={14} color={PINK} />
               </View>
               <Text style={styles.descText}>{item.text}</Text>
             </View>
@@ -121,11 +119,10 @@ export default function WelcomeScreen() {
 
         <View style={styles.spacer} />
 
-        {/* CTA */}
         <Animated.View entering={FadeInUp.delay(1000).duration(600)} style={styles.ctaBlock}>
           <TouchableOpacity style={styles.ctaButton} onPress={handleStart} activeOpacity={0.85}>
             <Text style={styles.ctaText}>Accéder à l'application</Text>
-            <Feather name="arrow-right" size={20} color="#0d2146" />
+            <Feather name="arrow-right" size={20} color="#ffffff" />
           </TouchableOpacity>
           <Text style={styles.legalNote}>
             Toutes vos données sont confidentielles et sécurisées
@@ -137,39 +134,39 @@ export default function WelcomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#0d2146" },
+  root: { flex: 1, backgroundColor: DARK },
   gradientOverlay: {
     position: "absolute",
     top: 0,
     left: 0,
     right: 0,
     height: height * 0.55,
-    opacity: 0.6,
+    opacity: 0.35,
   },
-  goldAccent: {
+  pinkAccent: {
     position: "absolute",
     top: -60,
     right: -60,
     width: 240,
     height: 240,
     borderRadius: 120,
-    backgroundColor: "#c9a227",
+    backgroundColor: PINK,
     opacity: 0.08,
   },
-  goldAccentBottom: {
+  pinkAccentBottom: {
     position: "absolute",
     bottom: -80,
     left: -80,
     width: 300,
     height: 300,
     borderRadius: 150,
-    backgroundColor: "#c9a227",
-    opacity: 0.06,
+    backgroundColor: BLUE,
+    opacity: 0.12,
   },
   circle: {
     position: "absolute",
     borderWidth: 1,
-    borderColor: "rgba(201,162,39,0.12)",
+    borderColor: "rgba(233,30,140,0.10)",
   },
   circle1: {
     width: 320,
@@ -201,9 +198,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 7,
-    backgroundColor: "rgba(201,162,39,0.15)",
+    backgroundColor: "rgba(233,30,140,0.15)",
     borderWidth: 1,
-    borderColor: "rgba(201,162,39,0.3)",
+    borderColor: "rgba(233,30,140,0.35)",
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 20,
@@ -212,10 +209,10 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: "#c9a227",
+    backgroundColor: PINK,
   },
   badgeText: {
-    color: "#c9a227",
+    color: PINK,
     fontSize: 11,
     fontWeight: "700",
     letterSpacing: 0.5,
@@ -232,7 +229,7 @@ const styles = StyleSheet.create({
     width: 150,
     height: 150,
     borderRadius: 75,
-    backgroundColor: "rgba(201,162,39,0.18)",
+    backgroundColor: "rgba(233,30,140,0.18)",
   },
   logoContainer: {
     width: 116,
@@ -240,7 +237,7 @@ const styles = StyleSheet.create({
     borderRadius: 30,
     backgroundColor: "rgba(255,255,255,0.06)",
     borderWidth: 1.5,
-    borderColor: "rgba(201,162,39,0.4)",
+    borderColor: "rgba(233,30,140,0.4)",
     alignItems: "center",
     justifyContent: "center",
     overflow: "hidden",
@@ -252,19 +249,18 @@ const styles = StyleSheet.create({
   nameBlock: {
     flexDirection: "row",
     alignItems: "baseline",
-    gap: 6,
     marginTop: 20,
   },
   appName: {
-    fontSize: 38,
+    fontSize: 36,
     fontWeight: "800",
     color: "#ffffff",
     letterSpacing: -1,
   },
-  appNameGold: {
-    fontSize: 38,
+  appNamePink: {
+    fontSize: 36,
     fontWeight: "800",
-    color: "#c9a227",
+    color: PINK,
     letterSpacing: -1,
   },
   tagline: {
@@ -284,7 +280,7 @@ const styles = StyleSheet.create({
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: "rgba(201,162,39,0.4)",
+    backgroundColor: "rgba(233,30,140,0.35)",
   },
   descBlock: {
     marginTop: 20,
@@ -305,7 +301,7 @@ const styles = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 8,
-    backgroundColor: "rgba(201,162,39,0.15)",
+    backgroundColor: "rgba(233,30,140,0.15)",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -327,14 +323,14 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 10,
     width: "100%",
-    backgroundColor: "#c9a227",
+    backgroundColor: PINK,
     paddingVertical: 17,
     borderRadius: 16,
   },
   ctaText: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#0d2146",
+    color: "#ffffff",
     letterSpacing: 0.2,
   },
   legalNote: {
