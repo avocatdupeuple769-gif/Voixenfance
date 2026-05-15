@@ -11,6 +11,7 @@ import {
   View,
 } from "react-native";
 import Animated, {
+  Easing,
   FadeIn,
   FadeInDown,
   FadeInUp,
@@ -30,6 +31,7 @@ export default function WelcomeScreen() {
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
   const pulse = useSharedValue(1);
+  const rotation = useSharedValue(0);
 
   useEffect(() => {
     pulse.value = withRepeat(
@@ -40,11 +42,20 @@ export default function WelcomeScreen() {
       -1,
       false
     );
+    rotation.value = withRepeat(
+      withTiming(360, { duration: 28000, easing: Easing.linear }),
+      -1,
+      false
+    );
   }, []);
 
   const pulseStyle = useAnimatedStyle(() => ({
     transform: [{ scale: pulse.value }],
     opacity: 0.15,
+  }));
+
+  const rotateStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${rotation.value}deg` }],
   }));
 
   const handleStart = () => {
@@ -71,17 +82,20 @@ export default function WelcomeScreen() {
 
         {/* Logo */}
         <Animated.View entering={FadeIn.delay(200).duration(700)} style={styles.logoWrap}>
-          <Image
-            source={require("../assets/images/logo.jpg")}
-            style={styles.logo}
-            contentFit="contain"
-          />
+          <Animated.View style={rotateStyle}>
+            <Image
+              source={require("../assets/images/logo.jpg")}
+              style={styles.logo}
+              contentFit="contain"
+            />
+          </Animated.View>
         </Animated.View>
 
         {/* Nom */}
         <Animated.View entering={FadeInUp.delay(400).duration(600)} style={styles.nameBlock}>
           <Text style={[styles.namePart, { color: ROSE }]}>Les Ailes</Text>
-          <Text style={[styles.namePart, { color: BLUE }]}> de Bride</Text>
+          <Text style={[styles.namePart, { color: "#9ca3af" }]}> de </Text>
+          <Text style={[styles.namePart, { color: BLUE }]}>Bride</Text>
         </Animated.View>
 
         <Animated.Text entering={FadeInUp.delay(500).duration(500)} style={styles.tagline}>
