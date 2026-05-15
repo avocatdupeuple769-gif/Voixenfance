@@ -4,7 +4,6 @@ import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import React, { useEffect } from "react";
 import {
-  Dimensions,
   Platform,
   StyleSheet,
   Text,
@@ -23,31 +22,29 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-const { width, height } = Dimensions.get("window");
-
-const PINK = "#E91E8C";
-const BLUE = "#1565C0";
-const DARK = "#0a1628";
+const ROSE = "#C2185B";
+const BLUE = "#1976D2";
+const GREEN = "#388E3C";
 
 export default function WelcomeScreen() {
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
-  const glow = useSharedValue(0.85);
+  const pulse = useSharedValue(1);
 
   useEffect(() => {
-    glow.value = withRepeat(
+    pulse.value = withRepeat(
       withSequence(
-        withTiming(1, { duration: 1800 }),
-        withTiming(0.85, { duration: 1800 })
+        withTiming(1.06, { duration: 1600 }),
+        withTiming(1, { duration: 1600 })
       ),
       -1,
       false
     );
   }, []);
 
-  const glowStyle = useAnimatedStyle(() => ({
-    opacity: glow.value,
-    transform: [{ scale: glow.value }],
+  const pulseStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: pulse.value }],
+    opacity: 0.15,
   }));
 
   const handleStart = () => {
@@ -60,73 +57,70 @@ export default function WelcomeScreen() {
 
   return (
     <View style={styles.root}>
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: DARK }]} />
-      <View style={[styles.gradientOverlay, { backgroundColor: BLUE }]} />
-      <View style={styles.pinkAccent} />
-      <View style={styles.pinkAccentBottom} />
+      {/* Décoration fond */}
+      <Animated.View style={[styles.bgBlob1, pulseStyle]} />
+      <View style={styles.bgBlob2} />
 
-      <View style={[styles.circle, styles.circle1]} />
-      <View style={[styles.circle, styles.circle2]} />
-      <View style={[styles.circle, styles.circle3]} />
+      <View style={[styles.content, { paddingTop: topPad + 24, paddingBottom: bottomPad + 24 }]}>
 
-      <View style={[styles.content, { paddingTop: topPad + 20, paddingBottom: bottomPad + 20 }]}>
-        <Animated.View entering={FadeInDown.delay(200).duration(600)} style={styles.topBadge}>
-          <View style={styles.badgeDot} />
-          <Text style={styles.badgeText}>GABON — Protection de l'Enfance</Text>
+        {/* Badge pays */}
+        <Animated.View entering={FadeInDown.delay(100).duration(500)} style={styles.topBadge}>
+          <View style={[styles.dot, { backgroundColor: GREEN }]} />
+          <Text style={[styles.badgeText, { color: GREEN }]}>GABON — Protection de l'Enfance</Text>
         </Animated.View>
 
-        <View style={styles.logoSection}>
-          <Animated.View style={[styles.glowRing, glowStyle]} />
-          <Animated.View entering={FadeIn.delay(300).duration(800)} style={styles.logoContainer}>
-            <Image
-              source={require("../assets/images/icon.png")}
-              style={styles.logo}
-              contentFit="contain"
-            />
-          </Animated.View>
-        </View>
-
-        <Animated.View entering={FadeInUp.delay(500).duration(700)} style={styles.nameBlock}>
-          <Text style={styles.appName}>Les Ailes</Text>
-          <Text style={styles.appNamePink}> de Bride</Text>
+        {/* Logo */}
+        <Animated.View entering={FadeIn.delay(200).duration(700)} style={styles.logoWrap}>
+          <Image
+            source={require("../assets/images/logo.jpg")}
+            style={styles.logo}
+            contentFit="contain"
+          />
         </Animated.View>
 
-        <Animated.Text entering={FadeInUp.delay(630).duration(600)} style={styles.tagline}>
+        {/* Nom */}
+        <Animated.View entering={FadeInUp.delay(400).duration(600)} style={styles.nameBlock}>
+          <Text style={[styles.namePart, { color: ROSE }]}>Les Ailes</Text>
+          <Text style={[styles.namePart, { color: BLUE }]}> de Bride</Text>
+        </Animated.View>
+
+        <Animated.Text entering={FadeInUp.delay(500).duration(500)} style={styles.tagline}>
           La protection des enfants du Gabon
         </Animated.Text>
 
-        <Animated.View entering={FadeIn.delay(700).duration(600)} style={styles.divider}>
-          <View style={styles.dividerLine} />
-          <Feather name="heart" size={13} color={PINK} />
-          <View style={styles.dividerLine} />
+        {/* Séparateur */}
+        <Animated.View entering={FadeIn.delay(600).duration(500)} style={styles.divider}>
+          <View style={[styles.dividerLine, { backgroundColor: ROSE, opacity: 0.2 }]} />
+          <Feather name="heart" size={12} color={ROSE} />
+          <View style={[styles.dividerLine, { backgroundColor: BLUE, opacity: 0.2 }]} />
         </Animated.View>
 
-        <Animated.View entering={FadeInUp.delay(800).duration(600)} style={styles.descBlock}>
+        {/* Fonctionnalités */}
+        <Animated.View entering={FadeInUp.delay(700).duration(600)} style={styles.featuresBlock}>
           {[
-            { icon: "user-x" as const, text: "Signalez anonymement — votre identité est protégée" },
-            { icon: "camera" as const, text: "Joignez des photos ou vidéos comme preuves" },
-            { icon: "phone-call" as const, text: "Numéros d'urgence disponibles 24h/24" },
-            { icon: "life-buoy" as const, text: "Ressources d'aide : ONG, soutien psychologique" },
+            { icon: "user-x" as const, text: "Signalez anonymement — votre identité est protégée", color: ROSE },
+            { icon: "camera" as const, text: "Joignez des photos ou vidéos comme preuves", color: BLUE },
+            { icon: "phone-call" as const, text: "Numéros d'urgence disponibles 24h/24", color: ROSE },
+            { icon: "life-buoy" as const, text: "Ressources d'aide : ONG, soutien psychologique", color: BLUE },
           ].map((item, i) => (
-            <View key={i} style={styles.descRow}>
-              <View style={styles.descIconWrap}>
-                <Feather name={item.icon} size={14} color={PINK} />
+            <View key={i} style={styles.featRow}>
+              <View style={[styles.featIcon, { backgroundColor: item.color + "15" }]}>
+                <Feather name={item.icon} size={14} color={item.color} />
               </View>
-              <Text style={styles.descText}>{item.text}</Text>
+              <Text style={styles.featText}>{item.text}</Text>
             </View>
           ))}
         </Animated.View>
 
         <View style={styles.spacer} />
 
-        <Animated.View entering={FadeInUp.delay(1000).duration(600)} style={styles.ctaBlock}>
-          <TouchableOpacity style={styles.ctaButton} onPress={handleStart} activeOpacity={0.85}>
+        {/* CTA */}
+        <Animated.View entering={FadeInUp.delay(900).duration(500)} style={styles.ctaBlock}>
+          <TouchableOpacity style={[styles.ctaButton, { backgroundColor: ROSE }]} onPress={handleStart} activeOpacity={0.85}>
             <Text style={styles.ctaText}>Accéder à l'application</Text>
             <Feather name="arrow-right" size={20} color="#ffffff" />
           </TouchableOpacity>
-          <Text style={styles.legalNote}>
-            Toutes vos données sont confidentielles et sécurisées
-          </Text>
+          <Text style={styles.legal}>Toutes vos données sont confidentielles et sécurisées</Text>
         </Animated.View>
       </View>
     </View>
@@ -134,208 +128,131 @@ export default function WelcomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: DARK },
-  gradientOverlay: {
+  root: { flex: 1, backgroundColor: "#f4f6f9" },
+
+  bgBlob1: {
     position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    height: height * 0.55,
-    opacity: 0.35,
+    top: -80,
+    right: -80,
+    width: 260,
+    height: 260,
+    borderRadius: 130,
+    backgroundColor: "#C2185B",
   },
-  pinkAccent: {
+  bgBlob2: {
     position: "absolute",
-    top: -60,
-    right: -60,
-    width: 240,
-    height: 240,
-    borderRadius: 120,
-    backgroundColor: PINK,
+    bottom: -100,
+    left: -80,
+    width: 280,
+    height: 280,
+    borderRadius: 140,
+    backgroundColor: "#1976D2",
     opacity: 0.08,
   },
-  pinkAccentBottom: {
-    position: "absolute",
-    bottom: -80,
-    left: -80,
-    width: 300,
-    height: 300,
-    borderRadius: 150,
-    backgroundColor: BLUE,
-    opacity: 0.12,
-  },
-  circle: {
-    position: "absolute",
-    borderWidth: 1,
-    borderColor: "rgba(233,30,140,0.10)",
-  },
-  circle1: {
-    width: 320,
-    height: 320,
-    borderRadius: 160,
-    top: height * 0.18,
-    left: width / 2 - 160,
-  },
-  circle2: {
-    width: 450,
-    height: 450,
-    borderRadius: 225,
-    top: height * 0.14,
-    left: width / 2 - 225,
-  },
-  circle3: {
-    width: 580,
-    height: 580,
-    borderRadius: 290,
-    top: height * 0.1,
-    left: width / 2 - 290,
-  },
+
   content: {
     flex: 1,
     alignItems: "center",
     paddingHorizontal: 28,
   },
+
   topBadge: {
     flexDirection: "row",
     alignItems: "center",
     gap: 7,
-    backgroundColor: "rgba(233,30,140,0.15)",
+    backgroundColor: "#388E3C18",
     borderWidth: 1,
-    borderColor: "rgba(233,30,140,0.35)",
+    borderColor: "#388E3C40",
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 20,
   },
-  badgeDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: PINK,
-  },
-  badgeText: {
-    color: PINK,
-    fontSize: 11,
-    fontWeight: "700",
-    letterSpacing: 0.5,
-  },
-  logoSection: {
-    marginTop: 26,
-    width: 140,
-    height: 140,
+  dot: { width: 6, height: 6, borderRadius: 3 },
+  badgeText: { fontSize: 11, fontWeight: "700", letterSpacing: 0.4 },
+
+  logoWrap: {
+    marginTop: 28,
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    backgroundColor: "#ffffff",
     alignItems: "center",
     justifyContent: "center",
+    shadowColor: "#1976D2",
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 6,
   },
-  glowRing: {
-    position: "absolute",
-    width: 150,
-    height: 150,
-    borderRadius: 75,
-    backgroundColor: "rgba(233,30,140,0.18)",
-  },
-  logoContainer: {
-    width: 116,
-    height: 116,
-    borderRadius: 30,
-    backgroundColor: "rgba(255,255,255,0.06)",
-    borderWidth: 1.5,
-    borderColor: "rgba(233,30,140,0.4)",
-    alignItems: "center",
-    justifyContent: "center",
-    overflow: "hidden",
-  },
-  logo: {
-    width: 98,
-    height: 98,
-  },
+  logo: { width: 140, height: 140, borderRadius: 70 },
+
   nameBlock: {
     flexDirection: "row",
     alignItems: "baseline",
-    marginTop: 20,
+    marginTop: 22,
+    gap: 0,
   },
-  appName: {
-    fontSize: 36,
-    fontWeight: "800",
-    color: "#ffffff",
-    letterSpacing: -1,
-  },
-  appNamePink: {
-    fontSize: 36,
-    fontWeight: "800",
-    color: PINK,
-    letterSpacing: -1,
-  },
+  namePart: { fontSize: 32, fontWeight: "800", letterSpacing: -0.8 },
+
   tagline: {
     fontSize: 14,
-    color: "rgba(255,255,255,0.6)",
-    marginTop: 5,
-    letterSpacing: 0.2,
+    color: "#6b7280",
+    marginTop: 6,
     textAlign: "center",
+    letterSpacing: 0.1,
   },
+
   divider: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    marginTop: 24,
+    marginTop: 22,
     width: "100%",
   },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: "rgba(233,30,140,0.35)",
-  },
-  descBlock: {
-    marginTop: 20,
+  dividerLine: { flex: 1, height: 1 },
+
+  featuresBlock: {
+    marginTop: 18,
     width: "100%",
     gap: 12,
-    backgroundColor: "rgba(255,255,255,0.04)",
+    backgroundColor: "#ffffff",
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
+    borderColor: "#dde2eb",
     padding: 18,
+    shadowColor: "#000",
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
   },
-  descRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  descIconWrap: {
-    width: 30,
-    height: 30,
-    borderRadius: 8,
-    backgroundColor: "rgba(233,30,140,0.15)",
+  featRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  featIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 9,
     alignItems: "center",
     justifyContent: "center",
   },
-  descText: {
-    color: "rgba(255,255,255,0.8)",
-    fontSize: 13,
-    flex: 1,
-    lineHeight: 18,
-  },
+  featText: { color: "#374151", fontSize: 13, flex: 1, lineHeight: 18 },
+
   spacer: { flex: 1 },
-  ctaBlock: {
-    width: "100%",
-    gap: 14,
-    alignItems: "center",
-  },
+
+  ctaBlock: { width: "100%", gap: 12, alignItems: "center" },
   ctaButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 10,
     width: "100%",
-    backgroundColor: PINK,
-    paddingVertical: 17,
-    borderRadius: 16,
+    paddingVertical: 16,
+    borderRadius: 14,
+    shadowColor: "#C2185B",
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
   },
-  ctaText: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: "#ffffff",
-    letterSpacing: 0.2,
-  },
-  legalNote: {
-    fontSize: 11,
-    color: "rgba(255,255,255,0.4)",
-    textAlign: "center",
-  },
+  ctaText: { fontSize: 16, fontWeight: "800", color: "#ffffff", letterSpacing: 0.2 },
+  legal: { fontSize: 11, color: "#9ca3af", textAlign: "center" },
 });
