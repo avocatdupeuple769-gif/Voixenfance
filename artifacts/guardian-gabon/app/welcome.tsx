@@ -93,8 +93,11 @@ export default function WelcomeScreen() {
 
         {/* Nom */}
         <Animated.View entering={FadeInUp.delay(400).duration(600)} style={styles.nameBlock}>
-          <Text style={[styles.namePart, { color: ROSE }]}>Les Ailes </Text>
-          <Text style={[styles.namePart, { color: BLUE }]}>de Bride</Text>
+          <Text style={styles.nameFull}>
+            <Text style={{ color: ROSE }}>Les Ailes</Text>
+            <Text style={{ color: ROSE }}>{"  "}</Text>
+            <Text style={{ color: BLUE }}>de Bride</Text>
+          </Text>
         </Animated.View>
 
         <Animated.Text entering={FadeInUp.delay(500).duration(500)} style={styles.tagline}>
@@ -200,12 +203,11 @@ const styles = StyleSheet.create({
   logo: { width: 140, height: 140, borderRadius: 70 },
 
   nameBlock: {
-    flexDirection: "row",
-    alignItems: "baseline",
     marginTop: 22,
-    gap: 0,
+    alignItems: "center",
   },
   namePart: { fontSize: 32, fontWeight: "800", letterSpacing: -0.8 },
+  nameFull: { fontSize: 32, fontWeight: "800", letterSpacing: -0.8 },
 
   tagline: {
     fontSize: 14,
