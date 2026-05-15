@@ -19,7 +19,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useApp } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
 
-type AbuseType = "sexual" | "violence" | "both";
+type AbuseType = "sexual" | "violence" | "both" | "inceste" | "attouchements" | "disparition";
 
 export default function ReportScreen() {
   const colors = useColors();
@@ -203,13 +203,21 @@ export default function ReportScreen() {
         </View>
 
         <Text style={[styles.sectionTitle, { color: colors.foreground, marginTop: 8 }]}>Type d'abus</Text>
-        <View style={styles.typeRow}>
-          {(["sexual", "violence", "both"] as AbuseType[]).map((type) => {
-            const labels = { sexual: "Abus sexuel", violence: "Violence", both: "Les deux" };
-            const isSelected = abuseType === type;
+        <View style={styles.typeGrid}>
+          {(
+            [
+              { key: "sexual", label: "Abus sexuel", icon: "alert-circle" },
+              { key: "violence", label: "Violence", icon: "zap" },
+              { key: "inceste", label: "Inceste", icon: "users" },
+              { key: "attouchements", label: "Attouchements & Intimidations", icon: "user-x" },
+              { key: "disparition", label: "Disparition", icon: "search" },
+              { key: "both", label: "Plusieurs types", icon: "layers" },
+            ] as { key: AbuseType; label: string; icon: string }[]
+          ).map(({ key, label, icon }) => {
+            const isSelected = abuseType === key;
             return (
               <TouchableOpacity
-                key={type}
+                key={key}
                 style={[
                   styles.typeButton,
                   {
@@ -217,10 +225,15 @@ export default function ReportScreen() {
                     borderColor: isSelected ? colors.primary : colors.border,
                   },
                 ]}
-                onPress={() => { Haptics.selectionAsync(); setAbuseType(type); }}
+                onPress={() => { Haptics.selectionAsync(); setAbuseType(key); }}
               >
+                <Feather
+                  name={icon as any}
+                  size={16}
+                  color={isSelected ? colors.primaryForeground : colors.mutedForeground}
+                />
                 <Text style={[styles.typeLabel, { color: isSelected ? colors.primaryForeground : colors.foreground }]}>
-                  {labels[type]}
+                  {label}
                 </Text>
               </TouchableOpacity>
             );
@@ -350,15 +363,17 @@ const styles = StyleSheet.create({
     minHeight: 200,
   },
   row: { flexDirection: "row", gap: 12 },
-  typeRow: { flexDirection: "row", gap: 8 },
+  typeGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   typeButton: {
-    flex: 1,
-    paddingVertical: 10,
+    width: "48%",
+    paddingVertical: 12,
+    paddingHorizontal: 10,
     borderRadius: 10,
     borderWidth: 1.5,
     alignItems: "center",
+    gap: 6,
   },
-  typeLabel: { fontSize: 13, fontWeight: "600", textAlign: "center" },
+  typeLabel: { fontSize: 12, fontWeight: "600", textAlign: "center" },
   mediaButton: {
     borderWidth: 1.5,
     borderStyle: "dashed",
