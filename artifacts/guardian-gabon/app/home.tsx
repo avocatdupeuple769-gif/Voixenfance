@@ -4,6 +4,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import React from "react";
 import {
+  Linking,
   Platform,
   ScrollView,
   StyleSheet,
@@ -15,6 +16,61 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { EmergencyBanner } from "@/components/EmergencyBanner";
 import { useApp } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
+
+const ASSO_PHONE = "+241 77 XX XX XX";
+
+const ABUSE_TYPES = [
+  {
+    key: "sexual",
+    label: "Abus Sexuel",
+    icon: "alert-circle" as const,
+    bg: "#fef2f2",
+    border: "#fecaca",
+    iconBg: "#fee2e2",
+    iconColor: "#dc2626",
+    textColor: "#991b1b",
+  },
+  {
+    key: "inceste",
+    label: "Inceste",
+    icon: "users" as const,
+    bg: "#fff7ed",
+    border: "#fed7aa",
+    iconBg: "#ffedd5",
+    iconColor: "#ea580c",
+    textColor: "#9a3412",
+  },
+  {
+    key: "attouchements",
+    label: "Attouchements & Intimidations",
+    icon: "user-x" as const,
+    bg: "#fdf4ff",
+    border: "#e9d5ff",
+    iconBg: "#f3e8ff",
+    iconColor: "#9333ea",
+    textColor: "#6b21a8",
+  },
+  {
+    key: "disparition",
+    label: "Disparition d'enfant",
+    icon: "search" as const,
+    bg: "#eff6ff",
+    border: "#bfdbfe",
+    iconBg: "#dbeafe",
+    iconColor: "#1565C0",
+    textColor: "#1e3a8a",
+  },
+  {
+    key: "violence",
+    label: "Violence sur mineur",
+    icon: "zap" as const,
+    bg: "#fefce8",
+    border: "#fde68a",
+    iconBg: "#fef9c3",
+    iconColor: "#ca8a04",
+    textColor: "#713f12",
+  },
+];
 
 export default function HomeScreen() {
   const colors = useColors();
@@ -38,35 +94,39 @@ export default function HomeScreen() {
     }
   };
 
+  const handleCallAsso = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    if (Platform.OS !== "web") {
+      Linking.openURL(`tel:${ASSO_PHONE.replace(/\s/g, "")}`);
+    }
+  };
+
   return (
     <View style={styles.root}>
-      {/* Header dégradé */}
       <LinearGradient
-        colors={["#0d2146", "#1a3a6b", "#1e4d8c"]}
+        colors={["#0a1628", "#1565C0", "#1976D2"]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={[styles.header, { paddingTop: isWeb ? 67 : insets.top + 16 }]}
       >
-        {/* Décorations */}
         <View style={styles.decCircle1} />
         <View style={styles.decCircle2} />
         <View style={styles.decAccent} />
 
         <EmergencyBanner />
 
-        {/* Identity */}
         <View style={styles.heroRow}>
           <TouchableOpacity onPress={handleSecretTap} activeOpacity={1}>
-            <View style={styles.shieldWrap}>
-              <Feather name="shield" size={28} color="#c9a227" />
+            <View style={styles.logoWrap}>
+              <Feather name="heart" size={28} color="#E91E8C" />
             </View>
           </TouchableOpacity>
           <View style={styles.heroText}>
             <View style={styles.nameRow}>
-              <Text style={styles.appNameWhite}>Voix</Text>
-              <Text style={styles.appNameGold}>Enfance</Text>
+              <Text style={styles.appNameWhite}>Les Ailes</Text>
+              <Text style={styles.appNamePink}> de Bride</Text>
             </View>
-            <Text style={styles.tagline}>La voix des enfants du Gabon</Text>
+            <Text style={styles.tagline}>Protection de l'enfance au Gabon</Text>
           </View>
           <View style={styles.gabonFlag}>
             <View style={[styles.flagBand, { backgroundColor: "#009e60" }]} />
@@ -75,9 +135,8 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* Confidentiality badge */}
         <View style={styles.heroBadge}>
-          <Feather name="lock" size={12} color="#c9a227" />
+          <Feather name="lock" size={12} color="#E91E8C" />
           <Text style={styles.heroBadgeText}>Signalement anonyme & confidentiel</Text>
         </View>
       </LinearGradient>
@@ -87,6 +146,29 @@ export default function HomeScreen() {
         contentContainerStyle={[styles.content, { paddingBottom: bottomPadding + 40 }]}
         showsVerticalScrollIndicator={false}
       >
+        {/* Appel association */}
+        <TouchableOpacity
+          style={styles.assoCard}
+          onPress={handleCallAsso}
+          activeOpacity={0.85}
+        >
+          <LinearGradient
+            colors={["#E91E8C", "#c2185b"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.assoGradient}
+          >
+            <View style={styles.assoIconWrap}>
+              <Feather name="phone" size={22} color="#ffffff" />
+            </View>
+            <View style={styles.actionTextBlock}>
+              <Text style={styles.assoTitle}>Association Les Ailes de Bride</Text>
+              <Text style={styles.assoNumber}>{ASSO_PHONE}</Text>
+            </View>
+            <Feather name="phone-call" size={20} color="rgba(255,255,255,0.85)" />
+          </LinearGradient>
+        </TouchableOpacity>
+
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
           Que souhaitez-vous faire ?
         </Text>
@@ -118,6 +200,27 @@ export default function HomeScreen() {
             </View>
           </LinearGradient>
         </TouchableOpacity>
+
+        {/* Types d'abus */}
+        <Text style={[styles.sectionTitle, { color: colors.foreground, marginTop: 6 }]}>
+          Types d'abus à signaler
+        </Text>
+        {ABUSE_TYPES.map((item) => (
+          <TouchableOpacity
+            key={item.key}
+            style={[styles.abuseCard, { backgroundColor: item.bg, borderColor: item.border }]}
+            onPress={() => { Haptics.selectionAsync(); router.push("/report"); }}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.cardIcon, { backgroundColor: item.iconBg }]}>
+              <Feather name={item.icon} size={20} color={item.iconColor} />
+            </View>
+            <View style={styles.actionTextBlock}>
+              <Text style={[styles.cardTitle, { color: item.textColor }]}>{item.label}</Text>
+            </View>
+            <Feather name="chevron-right" size={18} color={item.iconColor} />
+          </TouchableOpacity>
+        ))}
 
         {/* Ressources */}
         <TouchableOpacity
@@ -157,7 +260,7 @@ export default function HomeScreen() {
           onPress={() => { Haptics.selectionAsync(); router.push("/admin-login"); }}
           activeOpacity={0.8}
         >
-          <View style={[styles.cardIcon, { backgroundColor: colors.secondary }]}>
+          <View style={[styles.cardIcon, { backgroundColor: colors.muted }]}>
             <Feather name="settings" size={22} color={colors.mutedForeground} />
           </View>
           <View style={styles.actionTextBlock}>
@@ -168,9 +271,9 @@ export default function HomeScreen() {
         </TouchableOpacity>
 
         {/* Comment ça fonctionne */}
-        <View style={[styles.infoCard, { backgroundColor: "#0d2146", borderColor: "rgba(201,162,39,0.3)" }]}>
+        <View style={[styles.infoCard, { backgroundColor: "#0a1628", borderColor: "rgba(233,30,140,0.3)" }]}>
           <View style={styles.infoHeader}>
-            <Feather name="shield" size={16} color="#c9a227" />
+            <Feather name="heart" size={16} color="#E91E8C" />
             <Text style={styles.infoTitle}>Comment ça fonctionne ?</Text>
           </View>
           {[
@@ -181,7 +284,7 @@ export default function HomeScreen() {
           ].map((item, i) => (
             <View key={i} style={styles.infoRow}>
               <View style={styles.infoIconWrap}>
-                <Feather name={item.icon} size={13} color="#c9a227" />
+                <Feather name={item.icon} size={13} color="#E91E8C" />
               </View>
               <Text style={styles.infoText}>{item.text}</Text>
             </View>
@@ -195,7 +298,6 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#f8fafc" },
 
-  /* Header */
   header: {
     paddingHorizontal: 18,
     paddingBottom: 22,
@@ -207,7 +309,7 @@ const styles = StyleSheet.create({
     width: 220,
     height: 220,
     borderRadius: 110,
-    backgroundColor: "rgba(201,162,39,0.07)",
+    backgroundColor: "rgba(233,30,140,0.08)",
     top: -60,
     right: -60,
   },
@@ -224,7 +326,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     width: 3,
     height: "100%",
-    backgroundColor: "#c9a227",
+    backgroundColor: "#E91E8C",
     right: 50,
     opacity: 0.15,
   },
@@ -234,21 +336,21 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 12,
   },
-  shieldWrap: {
+  logoWrap: {
     width: 52,
     height: 52,
     borderRadius: 16,
     backgroundColor: "rgba(255,255,255,0.08)",
     borderWidth: 1.5,
-    borderColor: "rgba(201,162,39,0.4)",
+    borderColor: "rgba(233,30,140,0.5)",
     alignItems: "center",
     justifyContent: "center",
   },
   heroText: { flex: 1 },
-  nameRow: { flexDirection: "row", alignItems: "baseline", gap: 4 },
-  appNameWhite: { fontSize: 22, fontWeight: "800", color: "#ffffff", letterSpacing: -0.5 },
-  appNameGold: { fontSize: 22, fontWeight: "800", color: "#c9a227", letterSpacing: -0.5 },
-  tagline: { fontSize: 12, color: "rgba(255,255,255,0.6)", marginTop: 2 },
+  nameRow: { flexDirection: "row", alignItems: "baseline" },
+  appNameWhite: { fontSize: 20, fontWeight: "800", color: "#ffffff", letterSpacing: -0.5 },
+  appNamePink: { fontSize: 20, fontWeight: "800", color: "#E91E8C", letterSpacing: -0.5 },
+  tagline: { fontSize: 11, color: "rgba(255,255,255,0.6)", marginTop: 2 },
 
   gabonFlag: {
     width: 30,
@@ -263,20 +365,46 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 7,
-    backgroundColor: "rgba(201,162,39,0.12)",
+    backgroundColor: "rgba(233,30,140,0.12)",
     borderWidth: 1,
-    borderColor: "rgba(201,162,39,0.25)",
+    borderColor: "rgba(233,30,140,0.3)",
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: 10,
     alignSelf: "flex-start",
   },
-  heroBadgeText: { color: "#c9a227", fontSize: 11, fontWeight: "600" },
+  heroBadgeText: { color: "#E91E8C", fontSize: 11, fontWeight: "600" },
 
-  /* Content */
   scroll: { flex: 1 },
-  content: { paddingHorizontal: 16, paddingTop: 18, gap: 10 },
+  content: { paddingHorizontal: 16, paddingTop: 14, gap: 10 },
   sectionTitle: { fontSize: 16, fontWeight: "700", marginBottom: 2 },
+
+  /* Association card */
+  assoCard: {
+    borderRadius: 16,
+    overflow: "hidden",
+    elevation: 4,
+    shadowColor: "#E91E8C",
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+  },
+  assoGradient: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    padding: 16,
+  },
+  assoIconWrap: {
+    width: 46,
+    height: 46,
+    borderRadius: 13,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  assoTitle: { fontSize: 13, fontWeight: "700", color: "#ffffff" },
+  assoNumber: { fontSize: 16, fontWeight: "800", color: "#ffffff", marginTop: 2, letterSpacing: 0.5 },
 
   /* Main action */
   mainAction: {
@@ -313,6 +441,16 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
+  /* Abuse type cards */
+  abuseCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+
   /* Action cards */
   actionCard: {
     flexDirection: "row",
@@ -342,13 +480,13 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   infoHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 2 },
-  infoTitle: { fontSize: 13, fontWeight: "700", color: "#c9a227" },
+  infoTitle: { fontSize: 13, fontWeight: "700", color: "#E91E8C" },
   infoRow: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
   infoIconWrap: {
     width: 26,
     height: 26,
     borderRadius: 7,
-    backgroundColor: "rgba(201,162,39,0.12)",
+    backgroundColor: "rgba(233,30,140,0.12)",
     alignItems: "center",
     justifyContent: "center",
     marginTop: 1,
