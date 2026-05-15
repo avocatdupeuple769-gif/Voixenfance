@@ -2,7 +2,8 @@ import { Feather } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
-import React from "react";
+import React, { useEffect } from "react";
+import Animated, { Easing, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from "react-native-reanimated";
 import {
   Linking,
   Platform,
@@ -37,6 +38,18 @@ export default function HomeScreen() {
   const isWeb = Platform.OS === "web";
   const bottomPadding = isWeb ? 34 : insets.bottom;
 
+  const rotation = useSharedValue(0);
+  useEffect(() => {
+    rotation.value = withRepeat(
+      withTiming(360, { duration: 28000, easing: Easing.linear }),
+      -1,
+      false
+    );
+  }, []);
+  const rotateStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${rotation.value}deg` }],
+  }));
+
   const tapCountRef = React.useRef(0);
   const tapTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -68,18 +81,21 @@ export default function HomeScreen() {
         <View style={styles.heroRow}>
           <TouchableOpacity onPress={handleSecretTap} activeOpacity={1}>
             <View style={styles.logoWrap}>
-              <Image
-                source={require("../assets/images/logo.jpg")}
-                style={styles.logoImg}
-                contentFit="contain"
-              />
+              <Animated.View style={rotateStyle}>
+                <Image
+                  source={require("../assets/images/logo.jpg")}
+                  style={styles.logoImg}
+                  contentFit="contain"
+                />
+              </Animated.View>
             </View>
           </TouchableOpacity>
 
           <View style={styles.heroText}>
             <View style={styles.nameRow}>
               <Text style={[styles.nameRose]}>Les Ailes</Text>
-              <Text style={[styles.nameBlue]}> de Bride</Text>
+              <Text style={{ fontSize: 19, fontWeight: "800", color: "#9ca3af" }}> de </Text>
+              <Text style={[styles.nameBlue]}>Bride</Text>
             </View>
             <Text style={styles.tagline}>Protection de l'enfance au Gabon</Text>
           </View>
