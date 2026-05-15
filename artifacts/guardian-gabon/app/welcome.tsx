@@ -93,9 +93,8 @@ export default function WelcomeScreen() {
 
         {/* Nom */}
         <Animated.View entering={FadeInUp.delay(400).duration(600)} style={styles.nameBlock}>
-          <Text style={[styles.namePart, { color: ROSE }]}>Les Ailes</Text>
-          <Text style={[styles.namePart, { color: "#9ca3af" }]}> de </Text>
-          <Text style={[styles.namePart, { color: BLUE }]}>Bride</Text>
+          <Text style={[styles.namePart, { color: ROSE }]}>Les Ailes </Text>
+          <Text style={[styles.namePart, { color: BLUE }]}>de Bride</Text>
         </Animated.View>
 
         <Animated.Text entering={FadeInUp.delay(500).duration(500)} style={styles.tagline}>
