@@ -8,15 +8,15 @@ import React, {
   useState,
 } from "react";
 import {
-  FIREBASE_API_KEY,
-  FIREBASE_STORAGE_BUCKET,
   dbDelete,
   dbGet,
   dbPatch,
   dbSet,
-  storagePublicUrl,
-  storageUploadUrl,
 } from "@/lib/firebase";
+import {
+  CLOUDINARY_UPLOAD_PRESET,
+  cloudinaryUploadUrl,
+} from "@/lib/cloudinary";
 
 export interface Report {
   id: string;
@@ -108,62 +108,57 @@ function getMimeFromUri(uri: string, fallback: string): string {
 }
 
 /**
- * Upload media to Firebase Storage.
- * Uses FileSystem.uploadAsync (binary stream) first — no base64 OOM risk.
- * Falls back to blob fetch, then skips silently if all fail.
+ * Upload media to Cloudinary (free, never pauses, 25 GB).
+ * Uses MULTIPART form upload via FileSystem.uploadAsync — most reliable on Android.
+ * Falls back to base64 form upload if that fails.
+ * Returns public URL or null (report still submits if media fails).
  */
 async function uploadMedia(
   localUri: string,
   mimeType: string,
   fileName: string
 ): Promise<string | null> {
-  const detectedMime = getMimeFromUri(localUri, mimeType);
-  const storagePath = `media/${fileName}`;
-  const uploadUrl = storageUploadUrl(storagePath);
+  const uploadUrl = cloudinaryUploadUrl();
 
-  // Method 1 — binary stream (most efficient, no memory spike)
+  // Method 1 — multipart form (binary stream, no base64 OOM risk, best for Android)
   try {
     const result = await FileSystem.uploadAsync(uploadUrl, localUri, {
       httpMethod: "POST",
-      uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
-      headers: { "Content-Type": detectedMime },
+      uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+      fieldName: "file",
+      parameters: {
+        upload_preset: CLOUDINARY_UPLOAD_PRESET,
+        public_id: fileName.replace(/\.[^.]+$/, ""), // strip extension
+      },
     });
     if (result.status >= 200 && result.status < 300) {
-      return storagePublicUrl(storagePath);
+      const data = JSON.parse(result.body);
+      if (data.secure_url) return data.secure_url as string;
     }
   } catch {
     /* fall through */
   }
 
-  // Method 2 — blob fetch (works when localUri is network-accessible)
-  try {
-    const blobRes = await fetch(localUri);
-    const blob = await blobRes.blob();
-    const res = await fetch(uploadUrl, {
-      method: "POST",
-      headers: { "Content-Type": detectedMime },
-      body: blob,
-    });
-    if (res.ok) return storagePublicUrl(storagePath);
-  } catch {
-    /* fall through */
-  }
-
-  // Method 3 — base64 (last resort, may fail on large files)
+  // Method 2 — base64 data URI upload (fallback)
   try {
     const base64 = await FileSystem.readAsStringAsync(localUri, {
       encoding: FileSystem.EncodingType.Base64,
     });
-    const binary = atob(base64);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    const blob = new Blob([bytes], { type: detectedMime });
+    const detectedMime = getMimeFromUri(localUri, mimeType);
+    const dataUri = `data:${detectedMime};base64,${base64}`;
     const res = await fetch(uploadUrl, {
       method: "POST",
-      headers: { "Content-Type": detectedMime },
-      body: blob,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        file: dataUri,
+        upload_preset: CLOUDINARY_UPLOAD_PRESET,
+        public_id: fileName.replace(/\.[^.]+$/, ""),
+      }),
     });
-    if (res.ok) return storagePublicUrl(storagePath);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.secure_url) return data.secure_url as string;
+    }
   } catch {
     /* give up */
   }
