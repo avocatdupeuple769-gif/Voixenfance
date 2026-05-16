@@ -1,12 +1,22 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system";
-import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
 import {
-  MEDIA_BUCKET,
-  REPORTS_BUCKET,
-  SUPABASE_SERVICE_KEY,
-  SUPABASE_URL,
-} from "@/lib/supabase";
+  FIREBASE_API_KEY,
+  FIREBASE_STORAGE_BUCKET,
+  dbDelete,
+  dbGet,
+  dbPatch,
+  dbSet,
+  storagePublicUrl,
+  storageUploadUrl,
+} from "@/lib/firebase";
 
 export interface Report {
   id: string;
@@ -14,7 +24,13 @@ export interface Report {
   reporterName: string;
   reporterAge: string;
   victimAge: string;
-  abuseType: "sexual" | "violence" | "both" | "inceste" | "attouchements" | "disparition";
+  abuseType:
+    | "sexual"
+    | "violence"
+    | "both"
+    | "inceste"
+    | "attouchements"
+    | "disparition";
   description: string;
   location: string;
   mediaUri?: string;
@@ -28,12 +44,25 @@ export interface Report {
 interface AppContextType {
   reports: Report[];
   addReport: (
-    report: Omit<Report, "id" | "submittedAt" | "status" | "trackingCode" | "mediaUri" | "mediaType" | "_localOnly">,
+    report: Omit<
+      Report,
+      | "id"
+      | "submittedAt"
+      | "status"
+      | "trackingCode"
+      | "mediaUri"
+      | "mediaType"
+      | "_localOnly"
+    >,
     localMediaUri?: string,
     mediaMimeType?: string,
     mediaType?: "photo" | "video"
   ) => Promise<string>;
-  updateReportStatus: (id: string, status: Report["status"], adminNote?: string) => Promise<void>;
+  updateReportStatus: (
+    id: string,
+    status: Report["status"],
+    adminNote?: string
+  ) => Promise<void>;
   deleteReport: (id: string) => Promise<void>;
   getReportByCode: (code: string) => Report | undefined;
   fetchReportByCode: (code: string) => Promise<Report | null>;
@@ -63,19 +92,25 @@ function generateTrackingCode(): string {
 function getMimeFromUri(uri: string, fallback: string): string {
   const ext = uri.split("?")[0].split(".").pop()?.toLowerCase() ?? "";
   const map: Record<string, string> = {
-    jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png",
-    heic: "image/heic", heif: "image/heic", gif: "image/gif",
-    webp: "image/webp", mp4: "video/mp4", mov: "video/quicktime",
-    avi: "video/x-msvideo", mkv: "video/x-matroska",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    png: "image/png",
+    heic: "image/heic",
+    heif: "image/heic",
+    gif: "image/gif",
+    webp: "image/webp",
+    mp4: "video/mp4",
+    mov: "video/quicktime",
+    avi: "video/x-msvideo",
+    mkv: "video/x-matroska",
   };
   return map[ext] || fallback || "application/octet-stream";
 }
 
 /**
- * Upload media file to Supabase Storage.
- * Uses FileSystem.uploadAsync (binary stream) first — avoids OOM on large files.
- * Falls back to a lightweight blob fetch if that fails.
- * Returns null silently if all methods fail — reports still get submitted.
+ * Upload media to Firebase Storage.
+ * Uses FileSystem.uploadAsync (binary stream) first — no base64 OOM risk.
+ * Falls back to blob fetch, then skips silently if all fail.
  */
 async function uploadMedia(
   localUri: string,
@@ -83,37 +118,38 @@ async function uploadMedia(
   fileName: string
 ): Promise<string | null> {
   const detectedMime = getMimeFromUri(localUri, mimeType);
-  const storagePath = fileName;
-  const uploadUrl = `${SUPABASE_URL}/storage/v1/object/${MEDIA_BUCKET}/${storagePath}`;
-  const authHeader = { Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`, "x-upsert": "true" };
+  const storagePath = `media/${fileName}`;
+  const uploadUrl = storageUploadUrl(storagePath);
 
-  // Method 1: Binary stream upload (most efficient — no base64, no memory spike)
+  // Method 1 — binary stream (most efficient, no memory spike)
   try {
     const result = await FileSystem.uploadAsync(uploadUrl, localUri, {
       httpMethod: "POST",
       uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
-      headers: { ...authHeader, "Content-Type": detectedMime },
+      headers: { "Content-Type": detectedMime },
     });
     if (result.status >= 200 && result.status < 300) {
-      return `${SUPABASE_URL}/storage/v1/object/public/${MEDIA_BUCKET}/${storagePath}`;
+      return storagePublicUrl(storagePath);
     }
-  } catch { /* fall through */ }
+  } catch {
+    /* fall through */
+  }
 
-  // Method 2: Fetch blob (works when URI is accessible as a network resource)
+  // Method 2 — blob fetch (works when localUri is network-accessible)
   try {
     const blobRes = await fetch(localUri);
     const blob = await blobRes.blob();
     const res = await fetch(uploadUrl, {
       method: "POST",
-      headers: { ...authHeader, "Content-Type": detectedMime },
+      headers: { "Content-Type": detectedMime },
       body: blob,
     });
-    if (res.ok) {
-      return `${SUPABASE_URL}/storage/v1/object/public/${MEDIA_BUCKET}/${storagePath}`;
-    }
-  } catch { /* fall through */ }
+    if (res.ok) return storagePublicUrl(storagePath);
+  } catch {
+    /* fall through */
+  }
 
-  // Method 3: Base64 (last resort — may fail for large files on Android)
+  // Method 3 — base64 (last resort, may fail on large files)
   try {
     const base64 = await FileSystem.readAsStringAsync(localUri, {
       encoding: FileSystem.EncodingType.Base64,
@@ -124,36 +160,15 @@ async function uploadMedia(
     const blob = new Blob([bytes], { type: detectedMime });
     const res = await fetch(uploadUrl, {
       method: "POST",
-      headers: { ...authHeader, "Content-Type": detectedMime },
+      headers: { "Content-Type": detectedMime },
       body: blob,
     });
-    if (res.ok) {
-      return `${SUPABASE_URL}/storage/v1/object/public/${MEDIA_BUCKET}/${storagePath}`;
-    }
-  } catch { /* give up */ }
+    if (res.ok) return storagePublicUrl(storagePath);
+  } catch {
+    /* give up */
+  }
 
   return null;
-}
-
-/** Upload a single JSON report object to Supabase Storage */
-async function pushReportToSupabase(report: Report): Promise<boolean> {
-  try {
-    const res = await fetch(
-      `${SUPABASE_URL}/storage/v1/object/${REPORTS_BUCKET}/${report.id}.json`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
-          "Content-Type": "application/json",
-          "x-upsert": "true",
-        },
-        body: JSON.stringify(report),
-      }
-    );
-    return res.ok;
-  } catch {
-    return false;
-  }
 }
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
@@ -161,10 +176,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [isAdmin, setIsAdmin] = useState(false);
 
   const saveToCache = useCallback(async (data: Report[]) => {
-    try { await AsyncStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(data)); } catch {}
+    try {
+      await AsyncStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(data));
+    } catch {}
   }, []);
 
-  /** Load local cache on mount, then retry any pending (offline) reports */
   useEffect(() => {
     (async () => {
       try {
@@ -175,7 +191,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     })();
   }, []);
 
-  /** Re-attempt uploading reports that failed due to network issues */
+  /** Re-upload reports that failed when there was no internet */
   const retryPending = async () => {
     try {
       const raw = await AsyncStorage.getItem(PENDING_KEY);
@@ -185,7 +201,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
       const stillPending: Report[] = [];
       for (const report of pending) {
-        const ok = await pushReportToSupabase(report);
+        const ok = await dbSet(`reports/${report.id}`, report);
         if (!ok) stillPending.push(report);
       }
       await AsyncStorage.setItem(PENDING_KEY, JSON.stringify(stillPending));
@@ -194,45 +210,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const refreshReports = useCallback(async (): Promise<{ newCount: number }> => {
     try {
-      const listRes = await fetch(
-        `${SUPABASE_URL}/storage/v1/object/list/${REPORTS_BUCKET}`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ limit: 1000, offset: 0, prefix: "" }),
-        }
+      const data = await dbGet<Record<string, Report>>("reports");
+      if (!data || typeof data !== "object") return { newCount: 0 };
+
+      const fetched = Object.values(data).sort(
+        (a, b) =>
+          new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime()
       );
-      if (!listRes.ok) return { newCount: 0 };
-      const files: Array<{ name: string }> = await listRes.json();
-      if (!Array.isArray(files)) return { newCount: 0 };
 
       const seenRaw = await AsyncStorage.getItem(SEEN_IDS_KEY);
       const seenIds: string[] = seenRaw ? JSON.parse(seenRaw) : [];
+      const newIds = fetched
+        .filter((r) => !seenIds.includes(r.id))
+        .map((r) => r.id);
 
-      const fetched: Report[] = [];
-      await Promise.all(
-        files
-          .filter((f) => f.name.endsWith(".json"))
-          .map(async (f) => {
-            try {
-              const r = await fetch(
-                `${SUPABASE_URL}/storage/v1/object/${REPORTS_BUCKET}/${f.name}`,
-                { headers: { Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` } }
-              );
-              if (r.ok) fetched.push(await r.json());
-            } catch {}
-          })
+      await AsyncStorage.setItem(
+        SEEN_IDS_KEY,
+        JSON.stringify([...seenIds, ...newIds])
       );
-
-      fetched.sort(
-        (a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime()
-      );
-
-      const newIds = fetched.filter((r) => !seenIds.includes(r.id)).map((r) => r.id);
-      await AsyncStorage.setItem(SEEN_IDS_KEY, JSON.stringify([...seenIds, ...newIds]));
       setReports(fetched);
       await saveToCache(fetched);
       return { newCount: newIds.length };
@@ -243,7 +238,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const addReport = useCallback(
     async (
-      reportData: Omit<Report, "id" | "submittedAt" | "status" | "trackingCode" | "mediaUri" | "mediaType" | "_localOnly">,
+      reportData: Omit<
+        Report,
+        | "id"
+        | "submittedAt"
+        | "status"
+        | "trackingCode"
+        | "mediaUri"
+        | "mediaType"
+        | "_localOnly"
+      >,
       localMediaUri?: string,
       mediaMimeType?: string,
       mediaType?: "photo" | "video"
@@ -251,14 +255,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const id = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
       const trackingCode = generateTrackingCode();
 
-      // 1. Upload media first (non-blocking — failure does NOT abort the report)
+      // Upload media first (non-blocking — failure does NOT abort the report)
       let remoteMediaUrl: string | undefined;
       if (localMediaUri) {
-        const mime = getMimeFromUri(localMediaUri, mediaMimeType ?? "application/octet-stream");
-        const ext = localMediaUri.split("?")[0].split(".").pop() ?? "bin";
+        const mime = getMimeFromUri(
+          localMediaUri,
+          mediaMimeType ?? "application/octet-stream"
+        );
+        const ext =
+          localMediaUri.split("?")[0].split(".").pop() ?? "bin";
         const url = await uploadMedia(localMediaUri, mime, `${id}.${ext}`);
         if (url) remoteMediaUrl = url;
-        // If url is null, image upload silently skipped — report still proceeds
       }
 
       const report: Report = {
@@ -270,11 +277,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         ...(remoteMediaUrl ? { mediaUri: remoteMediaUrl, mediaType } : {}),
       };
 
-      // 2. Try Supabase — if offline, save locally and queue for retry
-      const uploaded = await pushReportToSupabase(report);
+      // Save to Firebase Realtime Database
+      const uploaded = await dbSet(`reports/${id}`, report);
 
       if (!uploaded) {
-        // Save to local pending queue — will retry next app launch
+        // Save locally and retry next launch
         try {
           const raw = await AsyncStorage.getItem(PENDING_KEY);
           const pending: Report[] = raw ? JSON.parse(raw) : [];
@@ -282,12 +289,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           await AsyncStorage.setItem(PENDING_KEY, JSON.stringify(pending));
         } catch {}
 
-        // Still add to local list so admin on THIS device sees it
         const updated = [{ ...report, _localOnly: true }, ...reports];
         setReports(updated);
         await saveToCache(updated);
 
-        // Throw with a clear message that helps the user understand
         throw new Error(
           "Connexion au serveur impossible.\n\nVotre signalement a été sauvegardé sur votre téléphone et sera envoyé automatiquement dès que la connexion sera rétablie."
         );
@@ -302,24 +307,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   );
 
   const updateReportStatus = useCallback(
-    async (id: string, status: Report["status"], adminNote?: string) => {
-      const existing = reports.find((r) => r.id === id);
-      if (!existing) return;
-      const updated: Report = { ...existing, status, ...(adminNote !== undefined ? { adminNote } : {}) };
-      const res = await fetch(
-        `${SUPABASE_URL}/storage/v1/object/${REPORTS_BUCKET}/${id}.json`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
-            "Content-Type": "application/json",
-            "x-upsert": "true",
-          },
-          body: JSON.stringify(updated),
-        }
+    async (
+      id: string,
+      status: Report["status"],
+      adminNote?: string
+    ) => {
+      const patch: Partial<Report> = {
+        status,
+        ...(adminNote !== undefined ? { adminNote } : {}),
+      };
+      const ok = await dbPatch(`reports/${id}`, patch);
+      if (!ok) throw new Error("Impossible de mettre à jour le statut");
+
+      const newReports = reports.map((r) =>
+        r.id === id ? { ...r, ...patch } : r
       );
-      if (!res.ok) throw new Error("Impossible de mettre à jour le statut");
-      const newReports = reports.map((r) => (r.id === id ? updated : r));
       setReports(newReports);
       await saveToCache(newReports);
     },
@@ -328,15 +330,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const deleteReport = useCallback(
     async (id: string) => {
-      const res = await fetch(
-        `${SUPABASE_URL}/storage/v1/object/${REPORTS_BUCKET}`,
-        {
-          method: "DELETE",
-          headers: { Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ prefixes: [`${id}.json`] }),
-        }
-      );
-      if (!res.ok) throw new Error("Impossible de supprimer le signalement");
+      const ok = await dbDelete(`reports/${id}`);
+      if (!ok) throw new Error("Impossible de supprimer le signalement");
+
       const newReports = reports.filter((r) => r.id !== id);
       setReports(newReports);
       await saveToCache(newReports);
@@ -349,12 +345,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [reports]
   );
 
-  const fetchReportByCode = useCallback(async (code: string): Promise<Report | null> => {
-    const local = reports.find((r) => r.trackingCode === code);
-    if (local) return local;
-    await refreshReports();
-    return reports.find((r) => r.trackingCode === code) ?? null;
-  }, [reports, refreshReports]);
+  const fetchReportByCode = useCallback(
+    async (code: string): Promise<Report | null> => {
+      const local = reports.find((r) => r.trackingCode === code);
+      if (local) return local;
+      await refreshReports();
+      return reports.find((r) => r.trackingCode === code) ?? null;
+    },
+    [reports, refreshReports]
+  );
 
   const adminLogin = useCallback((password: string): boolean => {
     if (password === ADMIN_PASSWORD || password === TAP_UNLOCK_TOKEN) {
@@ -367,10 +366,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const adminLogout = useCallback(() => setIsAdmin(false), []);
 
   return (
-    <AppContext.Provider value={{
-      reports, addReport, updateReportStatus, deleteReport,
-      getReportByCode, fetchReportByCode, isAdmin, adminLogin, adminLogout, refreshReports,
-    }}>
+    <AppContext.Provider
+      value={{
+        reports,
+        addReport,
+        updateReportStatus,
+        deleteReport,
+        getReportByCode,
+        fetchReportByCode,
+        isAdmin,
+        adminLogin,
+        adminLogout,
+        refreshReports,
+      }}
+    >
       {children}
     </AppContext.Provider>
   );
