@@ -5,6 +5,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build-aab:
     name: AAB signé pour Play Store
@@ -65,8 +68,7 @@ jobs:
 
       - name: Patcher build.gradle pour la signature
         working-directory: artifacts/guardian-gabon
-        run: |
-          node patch-signing.js
+        run: node patch-signing.js
         env:
           GRADLE_FILE: android/app/build.gradle
 
@@ -92,16 +94,18 @@ jobs:
       - name: Vérifier AAB
         run: find artifacts/guardian-gabon/android/app/build/outputs/bundle -name "*.aab" -exec ls -lh {} \;
 
-      - name: Upload AAB Play Store
-        uses: actions/upload-artifact@v4
-        with:
-          name: LesAilesDeBride-PlayStore-AAB
-          path: artifacts/guardian-gabon/android/app/build/outputs/bundle/release/*.aab
-          retention-days: 60
+      - name: Publier GitHub Release avec le AAB
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          AAB_PATH="artifacts/guardian-gabon/android/app/build/outputs/bundle/release/app-release.aab"
+          KEYSTORE_PATH="artifacts/guardian-gabon/android/app/release.keystore"
+          TAG="playstore-v${{ github.run_number }}"
 
-      - name: Upload Keystore IMPORTANT
-        uses: actions/upload-artifact@v4
-        with:
-          name: LesAilesDeBride-Keystore-IMPORTANT
-          path: artifacts/guardian-gabon/android/app/release.keystore
-          retention-days: 60
+          gh release create "$TAG" \
+            --title "Les Ailes de Bride — Play Store AAB v${{ github.run_number }}" \
+            --notes "$(printf '## Fichiers a telecharger\n\n**app-release.aab** — a importer directement dans Google Play Console\n\n**release.keystore** — CONSERVEZ CE FICHIER PRECIEUSEMENT pour les mises a jour futures\n\n---\nBuild #${{ github.run_number }}')" \
+            "$AAB_PATH#app-release.aab" \
+            "$KEYSTORE_PATH#release.keystore"
+
+          echo "✅ Release créée : https://github.com/${{ github.repository }}/releases/tag/$TAG"
