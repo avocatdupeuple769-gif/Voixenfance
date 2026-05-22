@@ -74,11 +74,12 @@ jobs:
           EXPO_NO_TELEMETRY: 1
           CI: 1
 
-      - name: Générer keystore de signature
+      - name: Générer keystore et configurer la signature
         working-directory: artifacts/guardian-gabon
         run: |
+          # Générer le keystore directement dans android/app/ (chemin simple)
           keytool -genkey -v \
-            -keystore release.keystore \
+            -keystore android/app/release.keystore \
             -alias lesailesdebride \
             -keyalg RSA \
             -keysize 2048 \
@@ -87,38 +88,54 @@ jobs:
             -storepass LesAiles2024! \
             -keypass LesAiles2024!
           echo "✅ Keystore généré"
+          ls -lh android/app/release.keystore
 
-      - name: Ajouter signing config dans build.gradle
-        working-directory: artifacts/guardian-gabon
-        run: |
+          # Ajouter les variables de signature dans gradle.properties
+          cat >> android/gradle.properties << 'EOF'
+
+          RELEASE_STORE_FILE=release.keystore
+          RELEASE_KEY_ALIAS=lesailesdebride
+          RELEASE_STORE_PASSWORD=LesAiles2024!
+          RELEASE_KEY_PASSWORD=LesAiles2024!
+          EOF
+          echo "✅ gradle.properties mis à jour"
+
+          # Patcher build.gradle — approche gradle.properties (React Native officiel)
           node -e "
             const fs = require('fs');
-            const path = 'android/app/build.gradle';
-            let g = fs.readFileSync(path, 'utf8');
+            let g = fs.readFileSync('android/app/build.gradle', 'utf8');
 
-            const signingCfg = \`
-            signingConfigs {
-                release {
-                    storeFile file(new File(rootProject.projectDir, '../release.keystore').absolutePath)
-                    storePassword 'LesAiles2024!'
-                    keyAlias 'lesailesdebride'
-                    keyPassword 'LesAiles2024!'
+            const signingBlock = \`
+        signingConfigs {
+            release {
+                if (project.hasProperty('RELEASE_STORE_FILE')) {
+                    storeFile file(RELEASE_STORE_FILE)
+                    storePassword RELEASE_STORE_PASSWORD
+                    keyAlias RELEASE_KEY_ALIAS
+                    keyPassword RELEASE_KEY_PASSWORD
                 }
-            }\`;
+            }
+        }\`;
 
+            // Insérer signingConfigs juste avant buildTypes
             if (!g.includes('signingConfigs')) {
-                g = g.replace('android {', 'android {' + signingCfg);
+                g = g.replace(/(\n[ \t]+buildTypes\s*\{)/, signingBlock + '\$1');
             }
 
-            g = g.replace(
-                /buildTypes\s*\{([\s\S]*?)release\s*\{/,
-                (m) => m + '\n            signingConfig signingConfigs.release'
-            );
+            // Ajouter signingConfig dans le bloc release de buildTypes
+            if (!g.includes('signingConfig signingConfigs.release')) {
+                const buildTypesPos = g.indexOf('buildTypes');
+                const releasePos = g.indexOf('release {', buildTypesPos);
+                if (releasePos !== -1) {
+                    const insertPos = releasePos + 'release {'.length;
+                    g = g.slice(0, insertPos) +
+                        '\n            signingConfig signingConfigs.release' +
+                        g.slice(insertPos);
+                }
+            }
 
-            g = g.replace(/(signingConfig signingConfigs\.release[\s]*){2,}/g, 'signingConfig signingConfigs.release\n');
-
-            fs.writeFileSync(path, g);
-            console.log('✅ Signature injectée dans build.gradle');
+            fs.writeFileSync('android/app/build.gradle', g);
+            console.log('✅ build.gradle patché avec signingConfigs');
           "
 
       - name: Rendre Gradle exécutable
