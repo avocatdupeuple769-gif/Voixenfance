@@ -2,76 +2,91 @@ var fs = require('fs');
 var path = process.env.GRADLE_FILE || 'android/app/build.gradle';
 var g = fs.readFileSync(path, 'utf8');
 
-console.log('--- build.gradle original (lignes 100-130) ---');
-var lines = g.split('\n');
-lines.slice(99, 130).forEach(function(l, i) { console.log((i+100)+': '+l); });
-console.log('---');
-
-var releaseConfig = [
+var releaseEntry = [
   '        release {',
-  '            if (project.hasProperty("RELEASE_STORE_FILE")) {',
-  '                storeFile file(RELEASE_STORE_FILE)',
-  '                storePassword RELEASE_STORE_PASSWORD',
-  '                keyAlias RELEASE_KEY_ALIAS',
-  '                keyPassword RELEASE_KEY_PASSWORD',
-  '            }',
+  '            storeFile file("release.keystore")',
+  '            storePassword "LesAiles2024"',
+  '            keyAlias "lesailesdebride"',
+  '            keyPassword "LesAiles2024"',
   '        }'
 ].join('\n');
 
-var fullSigningBlock = [
-  '    signingConfigs {',
-  releaseConfig,
-  '    }'
-].join('\n');
-
+// 1. Ajouter 'release' dans signingConfigs (après le bloc 'debug')
 if (g.includes('signingConfigs')) {
-  // signingConfigs existe déjà — ajouter 'release' à l'intérieur
-  if (!g.includes('signingConfigs.release') && !g.includes('release {')) {
-    // Trouver la fin du bloc signingConfigs et insérer release avant la fermeture
-    var scIdx = g.indexOf('signingConfigs');
-    var openBrace = g.indexOf('{', scIdx);
-    // Trouver l'accolade fermante correspondante
+  if (!g.includes('"lesailesdebride"') && !g.includes("'lesailesdebride'")) {
+    // Trouver le bloc signingConfigs { ... } et insérer release après debug }
+    var scStart = g.indexOf('signingConfigs');
+    var openIdx = g.indexOf('{', scStart);
+    // Trouver la fermeture du bloc signingConfigs
     var depth = 1;
-    var pos = openBrace + 1;
+    var pos = openIdx + 1;
     while (pos < g.length && depth > 0) {
       if (g[pos] === '{') depth++;
       else if (g[pos] === '}') depth--;
       pos++;
     }
-    // pos est maintenant après la }, insérer release juste avant
-    var closingPos = pos - 1;
-    g = g.slice(0, closingPos) + '\n' + releaseConfig + '\n' + g.slice(closingPos);
-    console.log('release ajouté dans signingConfigs existant');
+    // Insérer releaseEntry avant la } fermante de signingConfigs
+    var closePos = pos - 1;
+    g = g.slice(0, closePos) + '\n' + releaseEntry + '\n' + g.slice(closePos);
+    console.log('release ajouté dans signingConfigs');
   } else {
     console.log('release déjà dans signingConfigs');
   }
 } else {
-  // Pas de signingConfigs — créer le bloc avant buildTypes
-  g = g.replace(/(\n[ \t]+buildTypes[ \t]*\{)/, '\n' + fullSigningBlock + '$1');
-  console.log('signingConfigs créé avec release');
+  console.log('ERREUR: signingConfigs non trouvé');
+  process.exit(1);
 }
 
-// Ajouter signingConfig dans buildTypes.release
-if (!g.includes('signingConfig signingConfigs.release')) {
-  var btIdx = g.indexOf('buildTypes');
-  if (btIdx !== -1) {
-    var relIdx = g.indexOf('release {', btIdx);
-    if (relIdx !== -1) {
-      var ins = relIdx + 'release {'.length;
-      g = g.slice(0, ins) + '\n            signingConfig signingConfigs.release' + g.slice(ins);
-      console.log('signingConfig signingConfigs.release ajouté dans buildTypes.release');
-    } else {
-      console.log('WARN: release { non trouvé dans buildTypes');
-    }
+// 2. Dans buildTypes.release, remplacer signingConfig signingConfigs.debug par release
+// Trouver le bloc buildTypes { release { ... } } et remplacer
+var btIdx = g.indexOf('buildTypes');
+var relIdx = g.indexOf('release {', btIdx);
+if (relIdx !== -1) {
+  // Trouver la fin du bloc release { ... }
+  var openR = g.indexOf('{', relIdx);
+  var depthR = 1;
+  var posR = openR + 1;
+  while (posR < g.length && depthR > 0) {
+    if (g[posR] === '{') depthR++;
+    else if (g[posR] === '}') depthR--;
+    posR++;
   }
+  var releaseBlock = g.slice(relIdx, posR);
+  
+  // Remplacer signingConfig signingConfigs.debug par signingConfig signingConfigs.release
+  var patchedBlock = releaseBlock.replace(/signingConfig\s+signingConfigs\.debug/g, 'signingConfig signingConfigs.release');
+  
+  // Supprimer toute ligne signingConfig déjà ajoutée par erreur si elle existe en double
+  var lines = patchedBlock.split('\n');
+  var seen = false;
+  lines = lines.filter(function(line) {
+    if (line.trim() === 'signingConfig signingConfigs.release') {
+      if (seen) return false;
+      seen = true;
+    }
+    return true;
+  });
+  patchedBlock = lines.join('\n');
+  
+  g = g.slice(0, relIdx) + patchedBlock + g.slice(posR);
+  console.log('signingConfig .debug remplacé par .release dans buildTypes.release');
 } else {
-  console.log('signingConfig déjà présent dans buildTypes.release');
+  console.log('ERREUR: release { non trouvé dans buildTypes');
+  process.exit(1);
 }
 
 fs.writeFileSync(path, g);
 console.log('build.gradle patché avec succès');
 
-console.log('--- build.gradle patché (lignes 100-135) ---');
-var patchedLines = g.split('\n');
-patchedLines.slice(99, 135).forEach(function(l, i) { console.log((i+100)+': '+l); });
-console.log('---');
+// Vérification rapide
+var lines2 = g.split('\n');
+console.log('--- Vérification signingConfigs ---');
+var start = false;
+lines2.forEach(function(l, i) {
+  if (l.includes('signingConfigs') && !l.includes('signingConfigs.')) start = true;
+  if (start) {
+    console.log((i+1)+': '+l);
+    if (l.trim() === '}' && start) { start = false; }
+  }
+  if (i > 130) start = false;
+});
