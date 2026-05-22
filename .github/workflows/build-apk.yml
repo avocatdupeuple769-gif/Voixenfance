@@ -53,11 +53,34 @@ jobs:
           EXPO_NO_TELEMETRY: 1
           CI: 1
 
-      - name: Générer keystore
+      - name: Préparer le keystore
         working-directory: artifacts/guardian-gabon
+        env:
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
         run: |
-          keytool -genkey -v -keystore android/app/release.keystore -alias lesailesdebride -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=LesAilesDeBride,O=LesAilesDeBride,L=Libreville,C=GA" -storepass LesAiles2024 -keypass LesAiles2024
-          echo "Keystore OK"
+          if [ -n "$RELEASE_KEYSTORE_BASE64" ]; then
+            echo "✅ Utilisation du keystore stocké (secret RELEASE_KEYSTORE_BASE64)"
+            echo "$RELEASE_KEYSTORE_BASE64" | base64 -d > android/app/release.keystore
+          else
+            echo "⚠️  Aucun secret RELEASE_KEYSTORE_BASE64 trouvé — génération d'un nouveau keystore"
+            keytool -genkey -v \
+              -keystore android/app/release.keystore \
+              -alias lesailesdebride \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=LesAilesDeBride,O=LesAilesDeBride,L=Libreville,C=GA" \
+              -storepass LesAiles2024 -keypass LesAiles2024
+            echo ""
+            echo "========================================================"
+            echo "IMPORTANT — COPIEZ CE BASE64 ET AJOUTEZ-LE COMME SECRET"
+            echo "Secret GitHub : RELEASE_KEYSTORE_BASE64"
+            echo "========================================================"
+            base64 -w 0 android/app/release.keystore
+            echo ""
+            echo "========================================================"
+          fi
+          echo "--- Empreinte SHA1 du keystore utilisé ---"
+          keytool -list -keystore android/app/release.keystore \
+            -storepass LesAiles2024 -alias lesailesdebride 2>/dev/null | grep -i "SHA1\|SHA-1" || true
           ls -lh android/app/release.keystore
 
       - name: Ajouter signing dans gradle.properties
