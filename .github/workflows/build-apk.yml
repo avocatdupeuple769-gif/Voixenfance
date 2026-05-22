@@ -1,4 +1,4 @@
-name: Build VoixEnfance APK + AAB
+name: Build AAB Play Store
 
 on:
   push:
@@ -6,8 +6,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-android:
-    name: Build Android APK + AAB
+  build-aab:
+    name: AAB signé pour Play Store
     runs-on: ubuntu-latest
 
     steps:
@@ -25,7 +25,7 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Prepare standalone package.json
+      - name: Résoudre package.json (workspace → npm)
         working-directory: artifacts/guardian-gabon
         run: |
           node -e "
@@ -49,36 +49,79 @@ jobs:
             pkg.devDependencies = resolve(pkg.devDependencies);
             pkg.dependencies = resolve(pkg.dependencies);
             fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2));
-            console.log('package.json resolved successfully');
+            console.log('package.json résolu');
           "
 
-      - name: Install dependencies with npm
+      - name: Installer les dépendances
         working-directory: artifacts/guardian-gabon
         run: npm install --legacy-peer-deps
 
-      - name: Create root node_modules symlink (for Metro bundler)
-        run: |
-          ln -sf artifacts/guardian-gabon/node_modules node_modules
-          echo "Symlink créé: $(readlink node_modules)"
+      - name: Symlink Metro bundler
+        run: ln -sf artifacts/guardian-gabon/node_modules node_modules
 
-      - name: Write .env files for Metro bundler
+      - name: Variables d'environnement (Firebase + Cloudinary)
         working-directory: artifacts/guardian-gabon
         run: |
-          echo "EXPO_PUBLIC_SUPABASE_URL=https://ilzrzwuhfraywjdlbtqf.supabase.co" > .env
-          echo "EXPO_PUBLIC_SUPABASE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlsenJ6d3VoZnJheXdqZGxidHFmIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NjYwOTQ2OCwiZXhwIjoyMDkyMTg1NDY4fQ.dqP30mpxRkCmg0nIFHSPLnol-y46u33CQONSYGyWDSg" >> .env
+          echo "EXPO_PUBLIC_FIREBASE_DB_URL=https://lesailesdebride-f3aca-default-rtdb.firebaseio.com" > .env
+          echo "EXPO_PUBLIC_CLOUDINARY_CLOUD=dwwky8tnr" >> .env
+          echo "EXPO_PUBLIC_CLOUDINARY_PRESET=afhxvsxc" >> .env
           cp .env .env.production
-          cat .env
 
-      - name: Expo Prebuild
+      - name: Expo Prebuild Android
         working-directory: artifacts/guardian-gabon
         run: npx expo prebuild --platform android --clean --no-install
         env:
           EXPO_NO_TELEMETRY: 1
           CI: 1
-          EXPO_PUBLIC_SUPABASE_URL: https://ilzrzwuhfraywjdlbtqf.supabase.co
-          EXPO_PUBLIC_SUPABASE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlsenJ6d3VoZnJheXdqZGxidHFmIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NjYwOTQ2OCwiZXhwIjoyMDkyMTg1NDY4fQ.dqP30mpxRkCmg0nIFHSPLnol-y46u33CQONSYGyWDSg
 
-      - name: Make Gradle executable
+      - name: Générer keystore de signature
+        working-directory: artifacts/guardian-gabon
+        run: |
+          keytool -genkey -v \
+            -keystore release.keystore \
+            -alias lesailesdebride \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -dname "CN=Les Ailes de Bride,O=LesAilesDeBride,L=Libreville,C=GA" \
+            -storepass LesAiles2024! \
+            -keypass LesAiles2024!
+          echo "✅ Keystore généré"
+
+      - name: Ajouter signing config dans build.gradle
+        working-directory: artifacts/guardian-gabon
+        run: |
+          node -e "
+            const fs = require('fs');
+            const path = 'android/app/build.gradle';
+            let g = fs.readFileSync(path, 'utf8');
+
+            const signingCfg = \`
+            signingConfigs {
+                release {
+                    storeFile file(new File(rootProject.projectDir, '../release.keystore').absolutePath)
+                    storePassword 'LesAiles2024!'
+                    keyAlias 'lesailesdebride'
+                    keyPassword 'LesAiles2024!'
+                }
+            }\`;
+
+            if (!g.includes('signingConfigs')) {
+                g = g.replace('android {', 'android {' + signingCfg);
+            }
+
+            g = g.replace(
+                /buildTypes\s*\{([\s\S]*?)release\s*\{/,
+                (m) => m + '\n            signingConfig signingConfigs.release'
+            );
+
+            g = g.replace(/(signingConfig signingConfigs\.release[\s]*){2,}/g, 'signingConfig signingConfigs.release\n');
+
+            fs.writeFileSync(path, g);
+            console.log('✅ Signature injectée dans build.gradle');
+          "
+
+      - name: Rendre Gradle exécutable
         working-directory: artifacts/guardian-gabon/android
         run: chmod +x gradlew
 
@@ -88,35 +131,30 @@ jobs:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: gradle-${{ hashFiles('artifacts/guardian-gabon/android/**/*.gradle*') }}
-          restore-keys: gradle-
+          key: gradle-aab-${{ hashFiles('artifacts/guardian-gabon/android/**/*.gradle*') }}
+          restore-keys: gradle-aab-
 
-      - name: Build Release APK + AAB
+      - name: Build AAB uniquement (Play Store)
         working-directory: artifacts/guardian-gabon/android
-        run: ./gradlew assembleRelease bundleRelease --no-daemon
+        run: ./gradlew bundleRelease --no-daemon
         env:
           GRADLE_OPTS: -Xmx4g -XX:MaxMetaspaceSize=512m
-          EXPO_PUBLIC_SUPABASE_URL: https://ilzrzwuhfraywjdlbtqf.supabase.co
-          EXPO_PUBLIC_SUPABASE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlsenJ6d3VoZnJheXdqZGxidHFmIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NjYwOTQ2OCwiZXhwIjoyMDkyMTg1NDY4fQ.dqP30mpxRkCmg0nIFHSPLnol-y46u33CQONSYGyWDSg
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: VoixEnfance-Android-APK
-          path: artifacts/guardian-gabon/android/app/build/outputs/apk/release/*.apk
-          retention-days: 30
-
-      - name: Upload AAB
-        uses: actions/upload-artifact@v4
-        with:
-          name: VoixEnfance-Android-AAB
-          path: artifacts/guardian-gabon/android/app/build/outputs/bundle/release/*.aab
-          retention-days: 30
-
-      - name: Build success
+      - name: Vérifier le AAB
         run: |
-          echo "✅ Build terminé !"
-          echo "--- APK ---"
-          find artifacts/guardian-gabon/android/app/build/outputs/apk -name "*.apk" -exec ls -lh {} \;
-          echo "--- AAB ---"
+          echo "=== AAB généré ==="
           find artifacts/guardian-gabon/android/app/build/outputs/bundle -name "*.aab" -exec ls -lh {} \;
+
+      - name: Upload AAB Play Store
+        uses: actions/upload-artifact@v4
+        with:
+          name: LesAilesDeBride-PlayStore-AAB
+          path: artifacts/guardian-gabon/android/app/build/outputs/bundle/release/*.aab
+          retention-days: 60
+
+      - name: Upload Keystore (GARDEZ CE FICHIER pour les mises à jour)
+        uses: actions/upload-artifact@v4
+        with:
+          name: LesAilesDeBride-Keystore-IMPORTANT
+          path: artifacts/guardian-gabon/release.keystore
+          retention-days: 60
