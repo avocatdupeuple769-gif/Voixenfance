@@ -25,32 +25,10 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Résoudre package.json (workspace → npm)
+      - name: Résoudre package.json
         working-directory: artifacts/guardian-gabon
         run: |
-          node -e "
-            const fs = require('fs');
-            const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-            const catalog = {
-              '@tanstack/react-query': '^5.90.21',
-              'react': '19.1.0',
-              'react-dom': '19.1.0',
-              'zod': '^3.25.76'
-            };
-            function resolve(deps) {
-              if (!deps) return deps;
-              const out = {};
-              for (const [k, v] of Object.entries(deps)) {
-                if (k === '@workspace/api-client-react') continue;
-                out[k] = v === 'catalog:' ? (catalog[k] || v) : v;
-              }
-              return out;
-            }
-            pkg.devDependencies = resolve(pkg.devDependencies);
-            pkg.dependencies = resolve(pkg.dependencies);
-            fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2));
-            console.log('package.json résolu');
-          "
+          node -e "var fs=require('fs');var pkg=JSON.parse(fs.readFileSync('package.json','utf8'));var cat={'@tanstack/react-query':'^5.90.21','react':'19.1.0','react-dom':'19.1.0','zod':'^3.25.76'};function res(d){if(!d)return d;var o={};Object.entries(d).forEach(function(e){if(e[0]==='@workspace/api-client-react')return;o[e[0]]=e[1]==='catalog:'?(cat[e[0]]||e[1]):e[1];});return o;}pkg.devDependencies=res(pkg.devDependencies);pkg.dependencies=res(pkg.dependencies);fs.writeFileSync('package.json',JSON.stringify(pkg,null,2));console.log('OK');"
 
       - name: Installer les dépendances
         working-directory: artifacts/guardian-gabon
@@ -59,12 +37,10 @@ jobs:
       - name: Symlink Metro bundler
         run: ln -sf artifacts/guardian-gabon/node_modules node_modules
 
-      - name: Variables d'environnement (Firebase + Cloudinary)
+      - name: Variables d'environnement
         working-directory: artifacts/guardian-gabon
         run: |
-          echo "EXPO_PUBLIC_FIREBASE_DB_URL=https://lesailesdebride-f3aca-default-rtdb.firebaseio.com" > .env
-          echo "EXPO_PUBLIC_CLOUDINARY_CLOUD=dwwky8tnr" >> .env
-          echo "EXPO_PUBLIC_CLOUDINARY_PRESET=afhxvsxc" >> .env
+          printf '%s\n' 'EXPO_PUBLIC_FIREBASE_DB_URL=https://lesailesdebride-f3aca-default-rtdb.firebaseio.com' 'EXPO_PUBLIC_CLOUDINARY_CLOUD=dwwky8tnr' 'EXPO_PUBLIC_CLOUDINARY_PRESET=afhxvsxc' > .env
           cp .env .env.production
 
       - name: Expo Prebuild Android
@@ -74,69 +50,25 @@ jobs:
           EXPO_NO_TELEMETRY: 1
           CI: 1
 
-      - name: Générer keystore et configurer la signature
+      - name: Générer keystore
         working-directory: artifacts/guardian-gabon
         run: |
-          # Générer le keystore directement dans android/app/ (chemin simple)
-          keytool -genkey -v \
-            -keystore android/app/release.keystore \
-            -alias lesailesdebride \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
-            -dname "CN=Les Ailes de Bride,O=LesAilesDeBride,L=Libreville,C=GA" \
-            -storepass LesAiles2024! \
-            -keypass LesAiles2024!
-          echo "✅ Keystore généré"
+          keytool -genkey -v -keystore android/app/release.keystore -alias lesailesdebride -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=LesAilesDeBride,O=LesAilesDeBride,L=Libreville,C=GA" -storepass LesAiles2024 -keypass LesAiles2024
+          echo "Keystore OK"
           ls -lh android/app/release.keystore
 
-          # Ajouter les variables de signature dans gradle.properties
-          cat >> android/gradle.properties << 'EOF'
+      - name: Ajouter signing dans gradle.properties
+        working-directory: artifacts/guardian-gabon
+        run: |
+          printf '\nRELEASE_STORE_FILE=release.keystore\nRELEASE_KEY_ALIAS=lesailesdebride\nRELEASE_STORE_PASSWORD=LesAiles2024\nRELEASE_KEY_PASSWORD=LesAiles2024\n' >> android/gradle.properties
+          echo "gradle.properties OK"
 
-          RELEASE_STORE_FILE=release.keystore
-          RELEASE_KEY_ALIAS=lesailesdebride
-          RELEASE_STORE_PASSWORD=LesAiles2024!
-          RELEASE_KEY_PASSWORD=LesAiles2024!
-          EOF
-          echo "✅ gradle.properties mis à jour"
-
-          # Patcher build.gradle — approche gradle.properties (React Native officiel)
-          node -e "
-            const fs = require('fs');
-            let g = fs.readFileSync('android/app/build.gradle', 'utf8');
-
-            const signingBlock = \`
-        signingConfigs {
-            release {
-                if (project.hasProperty('RELEASE_STORE_FILE')) {
-                    storeFile file(RELEASE_STORE_FILE)
-                    storePassword RELEASE_STORE_PASSWORD
-                    keyAlias RELEASE_KEY_ALIAS
-                    keyPassword RELEASE_KEY_PASSWORD
-                }
-            }
-        }\`;
-
-            // Insérer signingConfigs juste avant buildTypes
-            if (!g.includes('signingConfigs')) {
-                g = g.replace(/(\n[ \t]+buildTypes\s*\{)/, signingBlock + '\$1');
-            }
-
-            // Ajouter signingConfig dans le bloc release de buildTypes
-            if (!g.includes('signingConfig signingConfigs.release')) {
-                const buildTypesPos = g.indexOf('buildTypes');
-                const releasePos = g.indexOf('release {', buildTypesPos);
-                if (releasePos !== -1) {
-                    const insertPos = releasePos + 'release {'.length;
-                    g = g.slice(0, insertPos) +
-                        '\n            signingConfig signingConfigs.release' +
-                        g.slice(insertPos);
-                }
-            }
-
-            fs.writeFileSync('android/app/build.gradle', g);
-            console.log('✅ build.gradle patché avec signingConfigs');
-          "
+      - name: Patcher build.gradle pour la signature
+        working-directory: artifacts/guardian-gabon
+        run: |
+          node patch-signing.js
+        env:
+          GRADLE_FILE: android/app/build.gradle
 
       - name: Rendre Gradle exécutable
         working-directory: artifacts/guardian-gabon/android
@@ -151,16 +83,14 @@ jobs:
           key: gradle-aab-${{ hashFiles('artifacts/guardian-gabon/android/**/*.gradle*') }}
           restore-keys: gradle-aab-
 
-      - name: Build AAB uniquement (Play Store)
+      - name: Build AAB signé
         working-directory: artifacts/guardian-gabon/android
         run: ./gradlew bundleRelease --no-daemon
         env:
           GRADLE_OPTS: -Xmx4g -XX:MaxMetaspaceSize=512m
 
-      - name: Vérifier le AAB
-        run: |
-          echo "=== AAB généré ==="
-          find artifacts/guardian-gabon/android/app/build/outputs/bundle -name "*.aab" -exec ls -lh {} \;
+      - name: Vérifier AAB
+        run: find artifacts/guardian-gabon/android/app/build/outputs/bundle -name "*.aab" -exec ls -lh {} \;
 
       - name: Upload AAB Play Store
         uses: actions/upload-artifact@v4
@@ -169,9 +99,9 @@ jobs:
           path: artifacts/guardian-gabon/android/app/build/outputs/bundle/release/*.aab
           retention-days: 60
 
-      - name: Upload Keystore (GARDEZ CE FICHIER pour les mises à jour)
+      - name: Upload Keystore IMPORTANT
         uses: actions/upload-artifact@v4
         with:
           name: LesAilesDeBride-Keystore-IMPORTANT
-          path: artifacts/guardian-gabon/release.keystore
+          path: artifacts/guardian-gabon/android/app/release.keystore
           retention-days: 60
